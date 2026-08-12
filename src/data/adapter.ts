@@ -22,6 +22,20 @@ export interface DataAdapter {
   loadDraft(): Promise<DraftState | null>
   saveDraft(state: DraftState): Promise<void>
 
-  /** Phase 2. Present so the UI can render a scout panel before it exists. */
-  scoutPlayer?(player: Player): Promise<ScoutReport>
+  /**
+   * Stored apart from the draft so resetting a draft can't destroy it, and so
+   * a Wails shell can keep it in a config file instead of web storage.
+   */
+  loadApiKey(): Promise<string | null>
+  saveApiKey(key: string): Promise<void>
+
+  /** Live news check. Rejects with a `ScoutError` when it can't answer. */
+  scoutPlayer(player: Player): Promise<ScoutReport>
+
+  /**
+   * Scout reports survive a refresh. Each one costs money and ~20s, so losing
+   * an hour of them to an accidental reload is the worst waste in the app.
+   */
+  loadScoutReports(): Promise<ScoutReport[]>
+  saveScoutReports(reports: ScoutReport[]): Promise<void>
 }

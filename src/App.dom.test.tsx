@@ -4,23 +4,12 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import type { CachedRankings, DataAdapter } from './data/adapter'
-import type { DraftState, Player } from './domain/types'
+import type { DraftState, Player, ScoutReport } from './domain/types'
+import { ScoutError } from './data/scoutError'
+import { makePlayer, makeReport } from './test/factories'
 
-const player = (id: number, name: string, rank: number, position = 'RB'): Player => ({
-  id,
-  name,
-  position,
-  proTeamId: 1,
-  rank,
-  espnValue: 50,
-  marketValue: 52,
-  marketChange: 0,
-  adp: rank,
-  percentOwned: 99,
-  injuryStatus: null,
-  injured: false,
-  projectedPoints: 200,
-})
+const player = (id: number, name: string, rank: number, position = 'RB'): Player =>
+  makePlayer({ id, name, position, rank, adp: rank, marketValue: 52, percentOwned: 99 })
 
 const ROSTER = [
   player(1, 'Jahmyr Gibbs', 1),
@@ -32,6 +21,7 @@ const ROSTER = [
 class FakeAdapter implements DataAdapter {
   draft: DraftState | null = null
   rankings: CachedRankings | null = null
+  apiKey: string | null = null
 
   async fetchRankings() {
     return ROSTER
@@ -47,6 +37,23 @@ class FakeAdapter implements DataAdapter {
   }
   async saveDraft(s: DraftState) {
     this.draft = s
+  }
+  scoutReports: ScoutReport[] = []
+  async loadScoutReports() {
+    return this.scoutReports
+  }
+  async saveScoutReports(r: ScoutReport[]) {
+    this.scoutReports = r
+  }
+  async loadApiKey() {
+    return this.apiKey
+  }
+  async saveApiKey(key: string) {
+    this.apiKey = key
+  }
+  /** Overridden per-test where the scout is the thing under test. */
+  scoutPlayer = async (_player: Player): Promise<ScoutReport> => {
+    throw new ScoutError('No API key set — add one in Settings', 'auth')
   }
 }
 
@@ -123,7 +130,7 @@ describe('draft board end to end', () => {
   it('resumes a draft that was already in progress', async () => {
     const adapter = new FakeAdapter()
     adapter.draft = {
-      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12 },
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
       log: [{ playerId: 1, status: 'mine', price: 57, at: 0 }],
     }
 
@@ -206,7 +213,7 @@ describe('draft board end to end', () => {
     const user = userEvent.setup()
     const adapter = new FakeAdapter()
     adapter.draft = {
-      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12 },
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
       log: [{ playerId: 3, status: 'mine', price: 20, at: 0 }], // Josh Allen, QB
     }
     render(<App adapter={adapter} />)
@@ -225,6 +232,115 @@ describe('draft board end to end', () => {
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
     expect(screen.getByText('10 starting spots still open')).toBeInTheDocument()
+  })
+
+  it('surfaces a scout verdict on the row and its detail when expanded', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.draft = {
+      settings: { budget: 200, slots: 17, scoring: 'PPR', teamCount: 12, prewarmDepth: 3 },
+      log: [],
+    }
+    adapter.scoutPlayer = async (p: Player) =>
+      makeReport(p.id, {
+        verdict: 'RED',
+        headline: 'Ruled out for Week 1 with a hamstring strain.',
+        notes: ['Backup expected to start.'],
+        sources: [{ title: 'Beat writer', url: 'https://example.com/a' }],
+      })
+
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    // Pre-warmed in the background — no tap required.
+    expect(await screen.findAllByText('Risk')).not.toHaveLength(0)
+
+    await user.click(screen.getByText('Jahmyr Gibbs'))
+    expect(screen.getByText(/Ruled out for Week 1/)).toBeInTheDocument()
+    expect(screen.getByText('Backup expected to start.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Beat writer' })).toHaveAttribute(
+      'href',
+      'https://example.com/a',
+    )
+  })
+
+  it('keeps scout reports across a page refresh', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.scoutReports = [
+      makeReport(1, { verdict: 'CAUTION', headline: 'Limited in practice Wednesday.' }),
+    ]
+    const rescouted: number[] = []
+    adapter.scoutPlayer = async (p: Player) => {
+      rescouted.push(p.id)
+      return makeReport(p.id)
+    }
+
+    // A reload is a fresh mount against the same storage.
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    expect(await screen.findByText('Caution')).toBeInTheDocument()
+    await user.click(screen.getByText('Jahmyr Gibbs'))
+    expect(screen.getByText('Limited in practice Wednesday.')).toBeInTheDocument()
+    expect(screen.getByText(/^Checked /)).toBeInTheDocument()
+
+    // Players with no cached report are still checked; the restored one is not
+    // re-fetched, which is the whole saving.
+    expect(rescouted).not.toContain(1)
+  })
+
+  it('points at Settings instead of failing silently when no key is set', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await user.click(await screen.findByText('Jahmyr Gibbs'))
+
+    expect(screen.getByText(/Add an API key in Settings/)).toBeInTheDocument()
+  })
+
+  it('does not scout anything until a key exists', async () => {
+    const adapter = new FakeAdapter()
+    let calls = 0
+    adapter.scoutPlayer = async () => {
+      calls += 1
+      throw new ScoutError('nope', 'auth')
+    }
+
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await new Promise((r) => setTimeout(r, 20))
+
+    expect(calls).toBe(0)
+  })
+
+  it('clears the search from the inset button and keeps focus', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    const search = screen.getByPlaceholderText('Search players…')
+    await user.type(search, 'Nacua')
+    expect(screen.queryByText('Jahmyr Gibbs')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }))
+
+    expect(search).toHaveValue('')
+    expect(await screen.findByText('Jahmyr Gibbs')).toBeInTheDocument()
+    // Clearing is nearly always a prelude to typing the next name.
+    expect(search).toHaveFocus()
+  })
+
+  it('shows the clear button only when there is something to clear', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Search players…'), 'a')
+    expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument()
   })
 
   it('filters the board by position', async () => {

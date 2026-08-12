@@ -1,6 +1,8 @@
 import { memo } from 'react'
-import { isUnpriced, marketPremium, type Pick, type Player } from '../domain/types'
+import { isUnpriced, marketPremium, marketTrend, type Pick, type Player } from '../domain/types'
 import { posClass } from '../lib/format'
+import { ScoutChip, ScoutPanel } from './ScoutPanel'
+import type { ScoutReport } from '../domain/types'
 
 export interface PlayerRowProps {
   player: Player
@@ -15,6 +17,11 @@ export interface PlayerRowProps {
   onGone: (id: number) => void
   onBid: (player: Player) => void
   onClear: (id: number) => void
+  onScout: (player: Player) => void
+  scout?: ScoutReport
+  scouting: boolean
+  scoutError?: string
+  hasKey: boolean
 }
 
 /**
@@ -31,6 +38,11 @@ export const PlayerRow = memo(function PlayerRow({
   onGone,
   onBid,
   onClear,
+  onScout,
+  scout,
+  scouting,
+  scoutError,
+  hasKey,
 }: PlayerRowProps) {
   const taken = Boolean(pick)
 
@@ -48,6 +60,7 @@ export const PlayerRow = memo(function PlayerRow({
             <span className={`pos pos-${posClass(player.position)}`}>{player.position}</span>
             {pick?.status === 'mine' && <span className="tag mine">Mine · ${pick.price}</span>}
             {pick?.status === 'gone' && <span className="tag gone">Gone</span>}
+            <ScoutChip report={scout} loading={scouting} />
           </span>
         </span>
 
@@ -57,18 +70,27 @@ export const PlayerRow = memo(function PlayerRow({
       </button>
 
       {expanded && (
-        <div className="row-actions">
-          {taken ? (
-            <button className="act act-clear" onClick={() => onClear(player.id)}>Un-mark</button>
-          ) : (
-            <>
-              <button className="act act-gone" onClick={() => onGone(player.id)}>Gone</button>
-              <button className="act act-mine" onClick={() => onBid(player)} disabled={!affordable}>
-                {affordable ? 'We got them' : 'No budget'}
-              </button>
-            </>
-          )}
-        </div>
+        <>
+          <ScoutPanel
+            report={scout}
+            loading={scouting}
+            error={scoutError}
+            hasKey={hasKey}
+            onScout={() => onScout(player)}
+          />
+          <div className="row-actions">
+            {taken ? (
+              <button className="act act-clear" onClick={() => onClear(player.id)}>Un-mark</button>
+            ) : (
+              <>
+                <button className="act act-gone" onClick={() => onGone(player.id)}>Gone</button>
+                <button className="act act-mine" onClick={() => onBid(player)} disabled={!affordable}>
+                  {affordable ? 'We got them' : 'No budget'}
+                </button>
+              </>
+            )}
+          </div>
+        </>
       )}
     </li>
   )
@@ -78,11 +100,22 @@ export const PlayerRow = memo(function PlayerRow({
 function PlayerValue({ player }: { player: Player }) {
   if (!isUnpriced(player)) {
     const premium = marketPremium(player)
+    const trend = marketTrend(player)
     return (
       <>
         <span className="val-espn">${player.espnValue}</span>
         <span className="val-market">
           ${player.marketValue}
+          {trend && (
+            <span
+              className={`trend ${trend}`}
+              title={`Market price ${trend === 'up' ? 'rising' : 'falling'} — ${
+                player.marketChange > 0 ? '+' : ''
+              }$${player.marketChange.toFixed(2)}/day`}
+            >
+              {trend === 'up' ? '▲' : '▼'}
+            </span>
+          )}
           {premium !== 0 && (
             <span className={premium > 0 ? 'prem up' : 'prem down'}>
               {premium > 0 ? '+' : ''}{premium}

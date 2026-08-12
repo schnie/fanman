@@ -157,15 +157,41 @@
   transition: padding 120ms ease;
 }
 
+.search-wrap {
+  position: relative;
+  display: flex;
+}
+
 .search {
   width: 100%;
   min-height: 46px;
-  padding: 0 14px;
+  /* Right padding clears the button so long names don't run underneath it. */
+  padding: 0 46px 0 14px;
   border-radius: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
   /* 16px minimum stops iOS from zooming the viewport on focus. */
   font-size: 16px;
+}
+
+/* A 44px target sitting over the input's right edge — small glyph, large
+   hit area, because this gets tapped in a hurry. */
+.search-clear {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--muted);
+  border-radius: 0 10px 10px 0;
+}
+
+.search-clear:active {
+  color: var(--text);
 }
 
 .filters {
@@ -214,12 +240,8 @@
   color: var(--amber);
 }
 
-.banner button {
-  margin-left: auto;
-  text-decoration: underline;
-  color: inherit;
-}
-
+/* Inline "fix it" affordances, wherever they appear. */
+.banner button,
 /* ---------- board ---------- */
 
 .board,
@@ -319,7 +341,7 @@
 }
 
 .tag.mine {
-  background: rgba(63, 185, 80, 0.18);
+  background: var(--tint-green);
   color: var(--green);
 }
 
@@ -373,8 +395,19 @@
   font-weight: 600;
 }
 
-.prem.up { color: var(--red); }
-.prem.down { color: var(--green); }
+/* Direction only, and smaller than the premium: this is a tertiary signal that
+   qualifies the gap rather than competing with it. */
+.trend {
+  margin-left: 4px;
+  font-size: 9px;
+  vertical-align: 1px;
+}
+
+/* Both read from the bidder's side: up costs you more, down costs you less. */
+.prem.up, .trend.up { color: var(--red); }
+.prem.down, .trend.down { color: var(--green); }
+
+
 
 .row-actions {
   display: flex;
@@ -728,4 +761,129 @@ hr {
   .scroll-top {
     animation: none;
   }
+}
+
+/* ---------- scout ---------- */
+
+.scout-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.scout-chip.green { background: var(--tint-green); color: var(--green); }
+.scout-chip.caution { background: var(--tint-amber); color: var(--amber); }
+.scout-chip.red { background: var(--tint-red); color: var(--red); }
+
+/* Pre-warm in progress: a quiet pulse, not a spinner competing for attention. */
+.scout-chip.loading {
+  width: 26px;
+  height: 14px;
+  background: var(--surface-2);
+  animation: scout-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes scout-pulse {
+  50% { opacity: 0.35; }
+}
+
+.scout-panel {
+  margin: 0 14px 12px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+/* No verdict-coloured edge: the chip already carries the signal, and two
+   markers for one fact just competed with each other. */
+.scout-panel.muted { color: var(--muted); }
+
+.scout-panel.error {
+  color: var(--amber);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.scout-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.scout-headline {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.scout-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.scout-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.scout-sources a {
+  font-size: 12px;
+  color: var(--accent);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scout-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.scout-age {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scout-foot .scout-run {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.scout-run {
+  margin-top: 10px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.pane-heading {
+  margin: 4px 0 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+.field-stacked {
+  display: block;
+}
+
+.field-stacked input {
+  width: 100%;
+  text-align: left;
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

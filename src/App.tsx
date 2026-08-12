@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { BrowserAdapter } from './data/browserAdapter'
 import type { DataAdapter } from './data/adapter'
 import { useDraft, useRankings } from './useDraft'
+import { useScout } from './useScout'
 import { BudgetBar } from './components/BudgetBar'
 import { PlayerRow } from './components/PlayerRow'
 import { BidSheet } from './components/BidSheet'
@@ -37,12 +38,15 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
     draft.state.settings.scoring,
   )
 
+  const scout = useScout(adapter, players, draft.picks, draft.state.settings.prewarmDepth)
+
   const [tab, setTab] = useState<Tab>('board')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL')
   const [hideTaken, setHideTaken] = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [bidding, setBidding] = useState<Player | null>(null)
+  const searchInput = useRef<HTMLInputElement>(null)
   const { sentinel, stuck } = useStuck<HTMLDivElement>()
   // Separate, much later trigger than the header's: a back-to-top button that
   // showed up after one flick of the thumb would be noise. Short pages never
@@ -69,6 +73,14 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
     },
     [clearPlayer],
   )
+
+  // A new draft should not inherit the previous one's news.
+  const { resetDraft } = draft
+  const { clearReports } = scout
+  const resetAll = useCallback(() => {
+    resetDraft()
+    clearReports()
+  }, [resetDraft, clearReports])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -106,13 +118,37 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
 
         {tab === 'board' && (
           <div className="controls">
-            <input
-              className="search"
-              placeholder="Search players…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              autoComplete="off"
-            />
+            <div className="search-wrap">
+              <input
+                ref={searchInput}
+                className="search"
+                placeholder="Search players…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                autoComplete="off"
+                // Names get called out of order, so this field gets used in a
+                // hurry — no autocorrect mangling half-typed surnames.
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                enterKeyHint="search"
+              />
+              {query && (
+                <button
+                  type="button"
+                  className="search-clear"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setQuery('')
+                    // Keep the keyboard up: clearing is almost always a prelude
+                    // to typing the next name, not to dismissing the field.
+                    searchInput.current?.focus()
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             <div className="filters">
               {FILTERS.map((f) => (
                 <button
@@ -160,6 +196,11 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
                 onGone={crossOff}
                 onBid={setBidding}
                 onClear={unmark}
+                onScout={scout.scoutNow}
+                scout={scout.reports.get(p.id)}
+                scouting={scout.pending.has(p.id)}
+                scoutError={scout.errors.get(p.id)}
+                hasKey={scout.hasKey}
               />
             ))}
           </ul>
@@ -181,7 +222,10 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           fetchedAt={fetchedAt}
           onChange={draft.updateSettings}
           onRefresh={refresh}
-          onReset={draft.resetDraft}
+          onReset={resetAll}
+          adapter={adapter}
+          scoutCalls={scout.calls}
+          onKeyChange={scout.refreshKey}
         />
       )}
 

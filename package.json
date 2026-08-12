@@ -12,9 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:live": "FANMAN_LIVE=1 vitest run src/data/espn.live.test.ts",
-    "check": "tsc -b && vitest run && oxlint"
+    "check": "tsc -b && vitest run && oxlint",
+    "test:scout": "vitest run src/data/scout.live.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.116.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },

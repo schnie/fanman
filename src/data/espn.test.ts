@@ -44,7 +44,7 @@ describe('normalize', () => {
       rank: 1,
       espnValue: 57,
       marketValue: 63.9,
-      marketChange: 0,
+      marketChange: -0.01,
       adp: 1.6,
       injured: false,
       projectedPoints: 366.9,

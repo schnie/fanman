@@ -1,15 +1,41 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Scoring, Settings } from '../domain/types'
+import type { DataAdapter } from '../data/adapter'
 import { describeAge } from '../lib/format'
 
-export function SettingsPane({ settings, fetchedAt, onChange, onRefresh, onReset }: {
+export function SettingsPane({
+  settings,
+  fetchedAt,
+  onChange,
+  onRefresh,
+  onReset,
+  adapter,
+  scoutCalls,
+  onKeyChange,
+}: {
   settings: Settings
   fetchedAt: number | null
   onChange: (patch: Partial<Settings>) => void
   onRefresh: () => void
   onReset: () => void
+  adapter: DataAdapter
+  scoutCalls: number
+  onKeyChange: () => void
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
+  const [apiKey, setApiKey] = useState('')
+  const [keySaved, setKeySaved] = useState(false)
+
+  useEffect(() => {
+    adapter.loadApiKey().then((k) => setApiKey(k ?? ''))
+  }, [adapter])
+
+  const saveKey = async () => {
+    await adapter.saveApiKey(apiKey.trim())
+    onKeyChange()
+    setKeySaved(true)
+    setTimeout(() => setKeySaved(false), 2000)
+  }
 
   return (
     <div className="pane">
@@ -59,6 +85,46 @@ export function SettingsPane({ settings, fetchedAt, onChange, onRefresh, onReset
         Pull again right before the draft — auction values move daily.
       </div>
       <button className="wide" onClick={onRefresh}>Refresh rankings</button>
+
+      <hr />
+
+      <h3 className="pane-heading">Scout</h3>
+      <label className="field field-stacked">
+        <span>Anthropic API key</span>
+        <input
+          type="password"
+          value={apiKey}
+          placeholder="sk-ant-…"
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => setApiKey(e.target.value)}
+        />
+      </label>
+      <button className="wide" onClick={saveKey}>
+        {keySaved ? 'Saved' : 'Save key'}
+      </button>
+      <div className="field-note">
+        Stored on this device only — this app has no server. Use a dedicated key
+        with a spend cap and revoke it after the draft.
+      </div>
+
+      <label className="field">
+        <span>Auto-check top N</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={settings.prewarmDepth}
+          min={0}
+          max={40}
+          onChange={(e) => onChange({ prewarmDepth: clamp(e.target.value, 0, 40, 10) })}
+        />
+      </label>
+      <div className="field-note">
+        Checks the top N available players in the background so a verdict is
+        already waiting when a name is called. Each check is a paid API call —
+        set 0 to only check players you tap. <strong>{scoutCalls}</strong> run
+        this session.
+      </div>
 
       <hr />
 

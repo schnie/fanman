@@ -11,7 +11,7 @@ const won = (playerId: number, price: number): Pick => ({
 const gone = (playerId: number): Pick => ({ playerId, status: 'gone', price: 0, at: 0 })
 
 const draft = (log: Pick[], budget = 200, slots = 16): DraftState => ({
-  ...emptyDraft({ budget, slots, scoring: 'PPR', teamCount: 12 }),
+  ...emptyDraft({ budget, slots, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 }),
   log,
 })
 

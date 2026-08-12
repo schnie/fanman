@@ -16,6 +16,28 @@ export function isUnpriced(p: Player): boolean {
   return p.espnValue === 0 && p.marketValue === 0
 }
 
+/**
+ * Daily drift below this is noise, not a trend.
+ *
+ * Measured against a live top-150 board: median absolute change is $0.03 and
+ * the 80th percentile is $0.07. At 0.08 roughly one player in five carries an
+ * arrow — the ones genuinely moving. Lower it to 0.03 and half the board is
+ * flagged, which tells you nothing.
+ */
+export const MARKET_TREND_THRESHOLD = 0.08
+
+/**
+ * Which way the market price is moving, or null when it's flat.
+ *
+ * Direction alone is not a verdict: a falling price can mean the room has
+ * cooled on a player, or that news broke and the market repriced ahead of
+ * ESPN's book value. Pair it with the scout before acting on it.
+ */
+export function marketTrend(p: Player): 'up' | 'down' | null {
+  if (isUnpriced(p) || Math.abs(p.marketChange) < MARKET_TREND_THRESHOLD) return null
+  return p.marketChange > 0 ? 'up' : 'down'
+}
+
 export type Scoring = 'PPR' | 'STANDARD'
 
 export interface Player {
@@ -80,6 +102,12 @@ export interface Settings {
   slots: number
   scoring: Scoring
   teamCount: number
+  /**
+   * How many of the top available players to scout in the background. Each is
+   * a paid API call, so this is a spend dial as much as a feature toggle.
+   * 0 disables pre-warming; manual checks still work.
+   */
+  prewarmDepth: number
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -88,6 +116,7 @@ export const DEFAULT_SETTINGS: Settings = {
   slots: 17,
   scoring: 'PPR',
   teamCount: 12,
+  prewarmDepth: 10,
 }
 
 /**
@@ -103,7 +132,9 @@ export function emptyDraft(settings: Settings = DEFAULT_SETTINGS): DraftState {
   return { settings, log: [] }
 }
 
-export type Verdict = 'GREEN' | 'CAUTION' | 'RED'
+/** Single source for the verdict set — also handed to the model as a schema enum. */
+export const VERDICTS = ['GREEN', 'CAUTION', 'RED'] as const
+export type Verdict = (typeof VERDICTS)[number]
 
 export interface ScoutReport {
   playerId: number

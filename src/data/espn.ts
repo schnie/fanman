@@ -59,7 +59,10 @@ export function normalize(raw: unknown[], scoring: Scoring): Player[] {
       rank: ranks?.rank ?? 0,
       espnValue: ranks?.auctionValue ?? 0,
       marketValue: round1(own?.auctionValueAverage ?? 0),
-      marketChange: round1(own?.auctionValueAverageChange ?? 0),
+      // Kept raw. It is a small daily delta compared against a domain
+      // threshold, so rounding here (to 0.1) collapsed the useful range and
+      // broke that comparison. Display rounds it instead.
+      marketChange: own?.auctionValueAverageChange ?? 0,
       adp: round1(own?.averageDraftPosition ?? 0),
       percentOwned: round1(own?.percentOwned ?? 0),
       injuryStatus: p.injuryStatus ?? null,

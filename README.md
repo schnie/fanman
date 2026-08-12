@@ -87,11 +87,56 @@ It is never written into `espnValue`/`marketValue` — a number we invented must
 never be displayable as one ESPN published. If FPI is unreachable the coaches
 still appear, just unvalued.
 
+## The scout
+
+Checks a player for last-minute news — injuries, depth-chart moves, trades,
+suspensions — and returns a GREEN / CAUTION / RED verdict with sources.
+
+It is **one Claude API call** (`src/data/scout.ts`). The searching and the
+decision of when to stop run server-side via the `web_search` tool, so the
+client makes a single request and needs no backend. That is also why it ports
+unchanged to a Wails shell.
+
+**Pre-warmed, not on demand.** A search-backed call takes 10–30s, far longer
+than the gap between a name being called and the bidding closing. So the top N
+available players are checked in the background and the verdict is already
+waiting when the name comes up; tapping a player is only the fallback. Two
+calls run at a time, and a player is never checked twice unless you ask.
+
+**It costs money per use.** Each check is a billed call with web searches, so
+`Auto-check top N` in Settings is a spend dial as much as a feature toggle — 0
+disables background checking entirely. The number of calls made this session is
+shown next to it.
+
+**Reports survive a refresh.** They're persisted on the device and rehydrated
+on load, so an accidental reload mid-draft costs nothing — restored reports
+also seed the "already checked" set, so the queue never pays for them twice.
+Anything older than 12 hours is dropped rather than shown, because stale news
+presented as current is worse than no news. Every report displays its age, and
+resetting the draft clears them.
+
+The key is entered in Settings and stored on-device; there is no server to hold
+it. Use a dedicated key with a spend cap and revoke it after the draft. A
+missing or rejected key stops the queue rather than repeating the same failure
+across the whole board.
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-… npm run test:scout   # real, billed call
+```
+
+That live test is worth running once when you add a key. One thing could not be
+verified offline: whether structured outputs and the server-side search tool
+cooperate on the same request. The response parser tolerates the schema being
+ignored — it will read JSON out of a code fence or out of surrounding prose —
+so the scout works either way, but the live test is how you find out which path
+you are on.
+
 ## Status
 
-Working: board, search, position filters, cross-off, win-with-bid, budget math,
-undo, roster view, settings, persistence, offline fallback.
+Working: board, search, position and FLEX filters, cross-off, win-with-bid,
+budget math, undo, positional roster with bench divider, head coaches with
+FPI-derived values, settings, persistence, offline fallback, and the scout.
 
-Next: the scout (one Claude API call with server-side web search, returning a
-GREEN/CAUTION/RED verdict per player) behind `DataAdapter.scoutPlayer`, then
-pick a deployment target and harden offline. See PLAN.md §6–7.
+Next: pick a deployment target (PWA or Wails) and harden offline — service
+worker, cold start from cache, airplane-mode check. Then rehearse a full mock
+draft on the phone. See PLAN.md §7.

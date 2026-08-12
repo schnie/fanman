@@ -1,9 +1,13 @@
 import type { CachedRankings, DataAdapter } from './adapter'
 import { fetchRankings } from './espn'
-import type { DraftState, Scoring } from '../domain/types'
+import type { DraftState, Player, ScoutReport, Scoring } from '../domain/types'
+import { scoutPlayer } from './scout'
+import { ScoutError } from './scoutError'
 
 const KEY_RANKINGS = 'fanman.rankings.v1'
 const KEY_DRAFT = 'fanman.draft.v1'
+const KEY_API = 'fanman.apiKey.v1'
+const KEY_SCOUT = 'fanman.scout.v1'
 
 /**
  * Browser implementation. State lives in localStorage: the draft log is tiny,
@@ -30,6 +34,37 @@ export class BrowserAdapter implements DataAdapter {
 
   async saveDraft(state: DraftState): Promise<void> {
     write(KEY_DRAFT, state)
+  }
+
+  async loadApiKey(): Promise<string | null> {
+    try {
+      return localStorage.getItem(KEY_API) // stored raw, not JSON-wrapped
+    } catch {
+      return null
+    }
+  }
+
+  async saveApiKey(key: string): Promise<void> {
+    try {
+      if (key) localStorage.setItem(KEY_API, key)
+      else localStorage.removeItem(KEY_API)
+    } catch (err) {
+      console.error('fanman: failed to persist API key', err)
+    }
+  }
+
+  async loadScoutReports(): Promise<ScoutReport[]> {
+    return read<ScoutReport[]>(KEY_SCOUT) ?? []
+  }
+
+  async saveScoutReports(reports: ScoutReport[]): Promise<void> {
+    write(KEY_SCOUT, reports)
+  }
+
+  async scoutPlayer(player: Player): Promise<ScoutReport> {
+    const key = await this.loadApiKey()
+    if (!key) throw new ScoutError('No API key set — add one in Settings', 'auth')
+    return scoutPlayer(key, player)
   }
 }
 
