@@ -1,0 +1,62 @@
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #1f262e;
+  --line: #2d333b;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #2f81f7;
+  --green: #3fb950;
+  --amber: #d29922;
+  --red: #f85149;
+
+  /* Position palette, shared by board chips and roster slot chips. */
+  --pos-qb: #f778ba;
+  --pos-rb: #3fb950;
+  --pos-wr: #58a6ff;
+  --pos-te: #d29922;
+  --pos-flex: #a371f7;
+  --pos-dst: #79c0ff;
+  --pos-k: #8b949e;
+  --pos-hc: #ff9e64;
+
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  /* Full-height on iOS Safari without the toolbar stealing the bottom nav. */
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  /* Kill the 300ms tap delay and the grey flash on iOS. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#root {
+  min-height: 100dvh;
+}

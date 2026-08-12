@@ -1,0 +1,731 @@
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  /* Leave room for the fixed tab bar plus the iOS home indicator. */
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}
+
+.booting,
+.empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ---------- budget bar ---------- */
+
+/* One sticky container holds the budget bar AND the board controls, so they
+   pin as a single unit. Sticking them separately means the second one needs to
+   know the first one's exact height — which changes with wrapping, the
+   roster-full notice, and the compact state. */
+.sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  /* Contain the header's own paint so rows can't bleed through while scrolling. */
+  box-shadow: 0 1px 0 var(--line);
+}
+
+.budget-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  transition: padding 120ms ease;
+}
+
+.scroll-sentinel {
+  height: 1px;
+  margin-bottom: -1px;
+}
+
+/* ---- compact state: once pinned, claw vertical space back for the list ---- */
+
+.sticky-head.compact .budget-bar {
+  padding-top: max(6px, env(safe-area-inset-top));
+  padding-bottom: 6px;
+}
+
+.sticky-head.compact .budget-max-value {
+  font-size: 28px;
+}
+
+.sticky-head.compact .budget-label {
+  margin-bottom: 1px;
+}
+
+/* Avg/slot is a pacing signal, not a live-bidding one — first to go. */
+.sticky-head.compact .stat.secondary {
+  display: none;
+}
+
+.sticky-head.compact .controls {
+  padding-top: 8px;
+  padding-bottom: 6px;
+}
+
+.sticky-head.compact .filters {
+  padding-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .budget-bar,
+  .budget-max-value {
+    transition: none;
+  }
+}
+
+.budget-max {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.budget-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.budget-max-value {
+  font-size: 40px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
+  line-height: 1;
+  transition: font-size 120ms ease;
+}
+
+.budget-side {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.stat-value {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.undo {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.undo:disabled {
+  opacity: 0.35;
+}
+
+.roster-full {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--amber);
+}
+
+/* ---------- controls ---------- */
+
+/* Positioning comes from .sticky-head now — this is spacing only. */
+.controls {
+  padding: 12px 14px 8px;
+  background: var(--bg);
+  transition: padding 120ms ease;
+}
+
+.search {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  /* 16px minimum stops iOS from zooming the viewport on focus. */
+  font-size: 16px;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 10px 0 2px;
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 19px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.chip.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.banner {
+  margin: 0 14px 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.banner.warn {
+  background: rgba(210, 153, 34, 0.12);
+  border: 1px solid rgba(210, 153, 34, 0.4);
+  color: var(--amber);
+}
+
+.banner button {
+  margin-left: auto;
+  text-decoration: underline;
+  color: inherit;
+}
+
+/* ---------- board ---------- */
+
+.board,
+.roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  border-bottom: 1px solid var(--line);
+}
+
+.row.gone .row-main,
+.row.mine .row-main {
+  opacity: 0.45;
+}
+
+.row.mine {
+  border-left: 3px solid var(--green);
+}
+
+.row.gone {
+  border-left: 3px solid transparent;
+}
+
+.row-main {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 62px;
+  text-align: left;
+}
+
+.row-rank {
+  width: 28px;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.row-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.row-name {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.injury {
+  color: var(--red);
+  margin-left: 6px;
+  font-weight: 700;
+}
+
+.row-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pos {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+/* One palette, shared by the board's position chips and the roster's slot
+   chips — they drifted apart when duplicated. */
+.pos-QB, .slot-QB { color: var(--pos-qb); }
+.pos-RB, .slot-RB { color: var(--pos-rb); }
+.pos-WR, .slot-WR { color: var(--pos-wr); }
+.pos-TE, .slot-TE { color: var(--pos-te); }
+.pos-DST, .slot-DST { color: var(--pos-dst); }
+.pos-K, .slot-K { color: var(--pos-k); }
+.pos-HC, .slot-HC { color: var(--pos-hc); }
+.slot-FLEX { color: var(--pos-flex); }
+
+.tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tag.mine {
+  background: rgba(63, 185, 80, 0.18);
+  color: var(--green);
+}
+
+.tag.gone {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.row-values {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.val-espn {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* Our estimate, never ESPN's — deliberately a different colour from .val-espn. */
+.val-derived {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pos-hc);
+}
+
+.fpi-rank {
+  margin-left: 6px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  font-size: 11px;
+}
+
+.val-none {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.val-market {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.prem {
+  margin-left: 5px;
+  font-weight: 600;
+}
+
+.prem.up { color: var(--red); }
+.prem.down { color: var(--green); }
+
+.row-actions {
+  display: flex;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.act {
+  flex: 1;
+  min-height: 52px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.act-mine {
+  background: var(--green);
+  border-color: var(--green);
+  color: #06210c;
+}
+
+.act-mine:disabled {
+  opacity: 0.4;
+}
+
+.act-clear,
+.act-cancel {
+  color: var(--muted);
+}
+
+/* ---------- bid sheet ---------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line);
+}
+
+.sheet-player {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.sheet-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.sheet-price {
+  text-align: center;
+  padding: 14px 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-price .dollar {
+  font-size: 26px;
+  color: var(--muted);
+  vertical-align: 14px;
+}
+
+.sheet-price .amount {
+  font-size: 62px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sheet-preview {
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  min-height: 22px;
+  margin-bottom: 12px;
+}
+
+.sheet-preview.invalid {
+  color: var(--amber);
+}
+
+.pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.key {
+  min-height: 58px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.key-sub {
+  font-size: 17px;
+  color: var(--muted);
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+/* ---------- roster + settings ---------- */
+
+.pane {
+  padding: 16px 14px;
+}
+
+.pane-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: var(--muted);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.roster-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.roster-row.open .roster-name,
+.roster-row.open .roster-price {
+  opacity: 0.35;
+  font-style: italic;
+}
+
+/* Fixed-width slot chips so the position column reads as a straight edge down
+   the roster rather than ragged text. */
+.slot {
+  flex: 0 0 auto;
+  width: 46px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.slot-BE {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
+
+/* The starters/bench boundary — deliberately heavier than a row separator. */
+.bench-divider {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 14px 0 8px;
+  border-top: 3px solid var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.bench-warn {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--amber);
+}
+
+.roster-row.is-bench .roster-name {
+  color: var(--muted);
+}
+
+.roster-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.roster-price {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.field input,
+.field select {
+  width: 130px;
+  min-height: 46px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 16px;
+  text-align: right;
+}
+
+.field-note {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 14px 0 10px;
+  line-height: 1.5;
+}
+
+.wide {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 22px 0;
+}
+
+.danger-outline {
+  color: var(--red);
+  border-color: rgba(248, 81, 73, 0.5);
+}
+
+.danger-confirm p {
+  font-size: 15px;
+  margin: 0 0 12px;
+}
+
+.danger-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.danger-actions button {
+  flex: 1;
+  min-height: 50px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 16px;
+}
+
+.danger-actions .danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- tab bar ---------- */
+
+.tabs {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.tabs button {
+  flex: 1;
+  min-height: 60px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tabs button.on {
+  color: var(--accent);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* ---------- scroll to top ---------- */
+
+.scroll-top {
+  position: fixed;
+  right: 16px;
+  /* Clears the tab bar (60px + its safe-area padding) plus breathing room. */
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  z-index: 25;
+
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+
+  animation: scroll-top-in 140ms ease-out;
+}
+
+.scroll-top:active {
+  background: var(--line);
+}
+
+@keyframes scroll-top-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-top {
+    animation: none;
+  }
+}
