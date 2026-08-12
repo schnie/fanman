@@ -11,6 +11,7 @@ import { SettingsPane } from './components/SettingsPane'
 import { ScrollTopButton } from './components/ScrollTopButton'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
+import { useOnline } from './lib/useOnline'
 import { FLEX_POSITIONS } from './domain/lineup'
 import type { Player } from './domain/types'
 import './App.css'
@@ -32,13 +33,20 @@ const FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'D/ST', 'HC'] as co
 export default function App({ adapter: injected }: { adapter?: DataAdapter } = {}) {
   const fallback = useMemo(() => new BrowserAdapter(), [])
   const adapter = injected ?? fallback
+  const online = useOnline()
   const draft = useDraft(adapter)
   const { players, fetchedAt, loading, error, refresh } = useRankings(
     adapter,
     draft.state.settings.scoring,
   )
 
-  const scout = useScout(adapter, players, draft.picks, draft.state.settings.prewarmDepth)
+  const scout = useScout(
+    adapter,
+    players,
+    draft.picks,
+    draft.state.settings.prewarmDepth,
+    online,
+  )
 
   const [tab, setTab] = useState<Tab>('board')
   const [query, setQuery] = useState('')
@@ -114,6 +122,7 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           summary={draft.summary}
           onUndo={draft.undo}
           canUndo={draft.state.log.length > 0}
+          online={online}
         />
 
         {tab === 'board' && (
@@ -200,7 +209,8 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
                 scout={scout.reports.get(p.id)}
                 scouting={scout.pending.has(p.id)}
                 scoutError={scout.errors.get(p.id)}
-                hasKey={scout.hasKey}
+                hasKey={scout.hasKey && online}
+                offline={!online}
               />
             ))}
           </ul>

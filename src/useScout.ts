@@ -34,6 +34,8 @@ export function useScout(
   players: Player[],
   picks: Map<number, Pick>,
   prewarmDepth: number,
+  /** Attempting a check with no network just produces a confusing error. */
+  online = true,
 ) {
   const [reports, setReports] = useState<Map<number, ScoutReport>>(new Map())
   const [pending, setPending] = useState<Set<number>>(new Set())
@@ -151,11 +153,12 @@ export function useScout(
    */
   const scoutNow = useCallback(
     (player: Player) => {
+      if (!online) return
       if (isDispatched(player.id)) return // already coming; don't pay twice
       setErrors((prev) => mapRemove(prev, player.id))
       enqueue([player], true)
     },
-    [enqueue, isDispatched],
+    [enqueue, isDispatched, online],
   )
 
   /** Wipe cached reports — wired to the draft reset, which starts a new draft. */
@@ -170,13 +173,13 @@ export function useScout(
   // Keep the top of the available board warm. Runs whenever a pick changes who
   // is at the top, topping the queue up by roughly one player per pick.
   useEffect(() => {
-    if (!hasKey || !loaded || prewarmDepth <= 0) return
+    if (!hasKey || !loaded || !online || prewarmDepth <= 0) return
     const targets = players
       .filter((p) => !picks.has(p.id) && p.rank > 0)
       .slice(0, prewarmDepth)
       .filter((p) => !isFresh(reports.get(p.id)))
     enqueue(targets)
-  }, [hasKey, loaded, prewarmDepth, players, picks, reports, enqueue])
+  }, [hasKey, loaded, online, prewarmDepth, players, picks, reports, enqueue])
 
   const refreshKey = useCallback(async () => {
     setHasKey(Boolean(await adapter.loadApiKey()))

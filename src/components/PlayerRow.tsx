@@ -22,6 +22,7 @@ export interface PlayerRowProps {
   scouting: boolean
   scoutError?: string
   hasKey: boolean
+  offline?: boolean
 }
 
 /**
@@ -43,6 +44,7 @@ export const PlayerRow = memo(function PlayerRow({
   scouting,
   scoutError,
   hasKey,
+  offline,
 }: PlayerRowProps) {
   const taken = Boolean(pick)
 
@@ -76,6 +78,7 @@ export const PlayerRow = memo(function PlayerRow({
             loading={scouting}
             error={scoutError}
             hasKey={hasKey}
+            offline={offline}
             onScout={() => onScout(player)}
           />
           <div className="row-actions">

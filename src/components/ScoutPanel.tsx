@@ -22,11 +22,12 @@ export function ScoutChip({ report, loading }: { report?: ScoutReport; loading: 
 }
 
 /** The detail, shown only once a row is expanded. */
-export function ScoutPanel({ report, loading, error, hasKey, onScout }: {
+export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }: {
   report?: ScoutReport
   loading: boolean
   error?: string
   hasKey: boolean
+  offline?: boolean
   onScout: () => void
 }) {
   if (loading) {
@@ -48,7 +49,7 @@ export function ScoutPanel({ report, loading, error, hasKey, onScout }: {
         {hasKey ? (
           <button className="scout-run" onClick={onScout}>Check for news</button>
         ) : (
-          <span>Add an API key in Settings to check for news.</span>
+          <span>{offline ? 'Offline — news checks need a connection.' : 'Add an API key in Settings to check for news.'}</span>
         )}
       </div>
     )

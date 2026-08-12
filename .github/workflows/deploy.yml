@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you redeploy from the Actions tab without pushing — useful the morning
+  # of a draft if you just want to be certain the live build is current.
+  workflow_dispatch:
+
+# Least privilege: read the repo, publish Pages, and prove identity to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. `cancel-in-progress: false` so a queued deploy
+# finishes rather than being dropped — the last push should always win.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck, tests and lint all run before anything ships. The offline
+      # test suite makes no network calls, so this never touches ESPN or spends
+      # anything on the Anthropic API.
+      - run: npm run check
+
+      - name: Build
+        # Must match the repo name, or every asset 404s on a project page.
+        # Set to "/" for a user page or a custom domain.
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      # Catches the two failures that only appear in production: an asset base
+      # that doesn't match the repo, and a service worker precaching a file
+      # that isn't there (which breaks the first offline load, not the deploy).
+      - name: Verify build is deployable
+        env:
+          VITE_BASE: /${{ github.event.repository.name }}/
+        run: node scripts/verify-build.mjs
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
@@ -341,6 +341,30 @@ describe('draft board end to end', () => {
 
     await user.type(screen.getByPlaceholderText('Search players…'), 'a')
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument()
+  })
+
+  it('says it is offline rather than letting the scout fail obscurely', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      render(<App adapter={adapter} />)
+      await screen.findByText('Jahmyr Gibbs')
+
+      expect(screen.getByText('Offline')).toBeInTheDocument()
+      await user.click(screen.getByText('Jahmyr Gibbs'))
+      expect(screen.getByText(/Offline — news checks need a connection/)).toBeInTheDocument()
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('shows no offline marker when connected', async () => {
+    render(<App adapter={new FakeAdapter()} />)
+    await screen.findByText('Jahmyr Gibbs')
+    expect(screen.queryByText('Offline')).not.toBeInTheDocument()
   })
 
   it('filters the board by position', async () => {

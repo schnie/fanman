@@ -51,7 +51,16 @@
   padding-bottom: 6px;
 }
 
-.sticky-head.compact .budget-max-value {
+.sticky-head.compact .offline-dot {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--tint-amber);
+  color: var(--amber);
+  letter-spacing: 0.03em;
+}
+
+.budget-max-value {
   font-size: 28px;
 }
 
@@ -75,7 +84,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .budget-bar,
-  .budget-max-value {
+  .offline-dot {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--tint-amber);
+  color: var(--amber);
+  letter-spacing: 0.03em;
+}
+
+.budget-max-value {
     transition: none;
   }
 }
@@ -92,6 +110,15 @@
   letter-spacing: 0.08em;
   color: var(--muted);
   margin-bottom: 4px;
+}
+
+.offline-dot {
+  margin-left: 7px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--tint-amber);
+  color: var(--amber);
+  letter-spacing: 0.03em;
 }
 
 .budget-max-value {

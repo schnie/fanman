@@ -131,6 +131,52 @@ ignored — it will read JSON out of a code fence or out of surrounding prose �
 so the scout works either way, but the live test is how you find out which path
 you are on.
 
+## Offline
+
+The app is a PWA: `vite-plugin-pwa` precaches the entire shell (~380KB), so
+once it has been loaded a single time it starts with no network at all. Add it
+to the home screen and it runs full-screen with no browser chrome.
+
+What is deliberately **not** cached at runtime: ESPN, FPI, and the Anthropic
+API. Rankings already live in localStorage with a visible timestamp, and a
+silently stale scout report would be worse than none — so those go to the
+network or fail visibly rather than being served from a cache you can't see.
+
+Updates use `autoUpdate`. Draft state is in localStorage and survives a reload,
+so taking the newest code automatically is safe, and far better than being
+stuck on a stale build on draft morning with no way to tell.
+
+When the browser reports no network, the header shows an **Offline** marker and
+the scout stops dispatching entirely rather than queuing calls that can only
+fail. Everything else — board, bidding, budget math, roster — is local
+arithmetic and behaves identically.
+
+```bash
+npm run verify:build   # build, then check it is actually deployable
+```
+
+That check exists because two failures only show up in production: an asset
+base that doesn't match the repo name (404s everything on a project page), and
+a service worker precaching a file that isn't in `dist` (installs fine, then
+fails on the first offline load). CI runs it before every deploy.
+
+## Deploying to GitHub Pages
+
+`.github/workflows/deploy.yml` builds and publishes on every push to `main`.
+It runs `npm run check` first, so nothing ships without typecheck, tests and
+lint passing. The offline suite makes no network calls, so CI never touches
+ESPN or spends anything on the API.
+
+One-time setup on GitHub: **Settings → Pages → Source → GitHub Actions**.
+
+The base path is derived from the repository name automatically. For a user
+page (`<user>.github.io`) or a custom domain, set `VITE_BASE=/` in the
+workflow's build step instead.
+
+Free-tier Pages requires the repo be public. Nothing sensitive is in it: the
+API key is entered at runtime and stored on your device, and draft state never
+leaves the browser.
+
 ## Status
 
 Working: board, search, position and FLEX filters, cross-off, win-with-bid,

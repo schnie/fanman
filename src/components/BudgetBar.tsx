@@ -4,15 +4,21 @@ import type { BudgetSummary } from '../domain/budget'
  * The permanent header. `maxBid` is deliberately the largest thing on screen —
  * it's the number you're staring at while someone counts down a bid.
  */
-export function BudgetBar({ summary, onUndo, canUndo }: {
+export function BudgetBar({ summary, onUndo, canUndo, online }: {
   summary: BudgetSummary
   onUndo: () => void
   canUndo: boolean
+  online: boolean
 }) {
   return (
     <header className="budget-bar">
       <div className="budget-max">
-        <span className="budget-label">Max bid</span>
+        <span className="budget-label">
+          Max bid
+          {/* The board works offline; only the scout doesn't. Say so quietly
+              rather than letting it fail with a bare network error. */}
+          {!online && <span className="offline-dot" title="Offline — the board works, the scout won't">Offline</span>}
+        </span>
         <span className="budget-max-value">
           {summary.rosterFull ? '—' : `$${summary.maxBid}`}
         </span>
