@@ -109,7 +109,7 @@ export function SettingsPane({
       </div>
 
       <label className="field">
-        <span>Auto-check top N</span>
+        <span>Auto-scout top N</span>
         <input
           type="number"
           inputMode="numeric"
@@ -120,9 +120,9 @@ export function SettingsPane({
         />
       </label>
       <div className="field-note">
-        Checks the top N available players in the background so a verdict is
-        already waiting when a name is called. Each check is a paid API call —
-        set 0 to only check players you tap. <strong>{scoutCalls}</strong> run
+        Scouts the top N available players in the background so a verdict is
+        already waiting when a name is called. Each scout is a paid API call —
+        set 0 to only scout players you tap. <strong>{scoutCalls}</strong> run
         this session.
       </div>
 

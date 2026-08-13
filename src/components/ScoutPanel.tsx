@@ -12,7 +12,7 @@ const LABEL: Record<Verdict, string> = {
  * readable in the half-second before you commit to a bid.
  */
 export function ScoutChip({ report, loading }: { report?: ScoutReport; loading: boolean }) {
-  if (loading) return <span className="scout-chip loading" title="Checking for news…" />
+  if (loading) return <span className="scout-chip loading" title="Scouting…" />
   if (!report) return null
   return (
     <span className={`scout-chip ${report.verdict.toLowerCase()}`} title={report.headline}>
@@ -31,25 +31,34 @@ export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }:
   onScout: () => void
 }) {
   if (loading) {
-    return <div className="scout-panel muted">Checking recent news…</div>
+    return <div className="scout-empty">Scouting…</div>
   }
 
+  // Same inline treatment as the other one-liners: the card is reserved for an
+  // actual report. "Retry" rather than "Scout again" — this is resuming a
+  // failed attempt, not refreshing a finished one.
   if (error) {
     return (
-      <div className="scout-panel error">
+      <div className="scout-empty error">
         <span>{error}</span>
-        {hasKey && <button onClick={onScout}>Retry</button>}
+        {hasKey && <button className="scout-link" onClick={onScout}>Retry</button>}
       </div>
     )
   }
 
+  // Nothing to show yet. Deliberately no panel chrome: a bordered, padded box
+  // containing one button reads as an empty section rather than an action.
   if (!report) {
     return (
-      <div className="scout-panel muted">
+      <div className="scout-empty">
         {hasKey ? (
-          <button className="scout-run" onClick={onScout}>Check for news</button>
+          <button className="scout-link" onClick={onScout}>Scout this player</button>
         ) : (
-          <span>{offline ? 'Offline — news checks need a connection.' : 'Add an API key in Settings to check for news.'}</span>
+          <span>
+            {offline
+              ? 'Offline — scouting needs a connection.'
+              : 'Add an API key in Settings to scout players.'}
+          </span>
         )}
       </div>
     )
@@ -83,8 +92,8 @@ export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }:
       <div className="scout-foot">
         {/* Reports survive a refresh, so the age has to be visible — a restored
             report must not read as though it were just fetched. */}
-        <span className="scout-age">Checked {describeAge(report.fetchedAt)}</span>
-        <button className="scout-run" onClick={onScout}>Re-check</button>
+        <span className="scout-age">Scouted {describeAge(report.fetchedAt)}</span>
+        <button className="scout-run" onClick={onScout}>Scout again</button>
       </div>
     </div>
   )

@@ -51,19 +51,33 @@ export const PlayerRow = memo(function PlayerRow({
   return (
     <li className={`row ${pick?.status ?? ''} ${expanded ? 'expanded' : ''}`}>
       <button className="row-main" onClick={() => onToggle(player.id)}>
-        <span className="row-rank">{player.rank || '–'}</span>
+        {/* Rank and position stack in a fixed-width gutter. Position is a
+            property of the player, so it belongs with the other identifiers —
+            and a fixed width keeps the names on a straight left edge, which is
+            what you actually scan down. */}
+        <span className="row-gutter">
+          <span className="row-rank">{player.rank || '–'}</span>
+          <span className={`pos pos-${posClass(player.position)}`}>{player.position}</span>
+        </span>
 
         <span className="row-id">
           <span className="row-name">
             {player.name}
             {player.injured && <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>}
-          </span>
-          <span className="row-meta">
-            <span className={`pos pos-${posClass(player.position)}`}>{player.position}</span>
+            {/* "Mine" keeps a badge because it carries the price. "Gone" is
+                pure state, so the name is struck through instead. */}
             {pick?.status === 'mine' && <span className="tag mine">Mine · ${pick.price}</span>}
-            {pick?.status === 'gone' && <span className="tag gone">Gone</span>}
-            <ScoutChip report={scout} loading={scouting} />
           </span>
+
+          {/* Second line is news and nothing else — the summary you get
+              without tapping. It stands down entirely once expanded, where the
+              panel below carries the same verdict and headline in full. */}
+          {(scout || scouting) && !expanded && (
+            <span className="row-scout">
+              <ScoutChip report={scout} loading={scouting} />
+              {scout && <span className="row-scout-text">{scout.headline}</span>}
+            </span>
+          )}
         </span>
 
         <span className="row-values">

@@ -51,16 +51,7 @@
   padding-bottom: 6px;
 }
 
-.sticky-head.compact .offline-dot {
-  margin-left: 7px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--tint-amber);
-  color: var(--amber);
-  letter-spacing: 0.03em;
-}
-
-.budget-max-value {
+.sticky-head.compact .budget-max-value {
   font-size: 28px;
 }
 
@@ -84,16 +75,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .budget-bar,
-  .offline-dot {
-  margin-left: 7px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: var(--tint-amber);
-  color: var(--amber);
-  letter-spacing: 0.03em;
-}
-
-.budget-max-value {
+  .budget-max-value {
     transition: none;
   }
 }
@@ -267,8 +249,13 @@
   color: var(--amber);
 }
 
-/* Inline "fix it" affordances, wherever they appear. */
-.banner button,
+/* Inline "fix it" affordance in the stale-data banner. */
+.banner button {
+  margin-left: auto;
+  text-decoration: underline;
+  color: inherit;
+}
+
 /* ---------- board ---------- */
 
 .board,
@@ -295,22 +282,56 @@
   border-left: 3px solid transparent;
 }
 
+.row.gone .row-name {
+  text-decoration: line-through;
+  /* Dimmer than the text so the name stays readable through the line — you
+     still need to recognise who's off the board at a glance. */
+  text-decoration-color: var(--muted);
+}
+
 .row-main {
   width: 100%;
   display: flex;
-  align-items: center;
+  /* Top-aligned, not centred. Centring made the name's position depend on how
+     tall the block beneath it was, so it jumped when the news line appeared or
+     disappeared — and rows with news already sat their names higher than rows
+     without. Anchoring to the top pins the name, the rank and the price to one
+     baseline in every row, whatever is below them. */
+  align-items: flex-start;
   gap: 12px;
   padding: 12px 14px;
-  min-height: 62px;
+  /* Rows now vary in height with their content, so this is a tap-target floor
+     rather than a fixed row height. */
+  min-height: 52px;
   text-align: left;
 }
 
-.row-rank {
-  width: 28px;
+/* Fixed width so rank, position and every name below start on straight
+   vertical edges — the list is scanned down, not read across. */
+.row-gutter {
   flex: 0 0 auto;
+  width: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  /* On top of .row-main's 12px gap. The gutter is a separate column of
+     identifiers, so it wants a clearer break from the name than the name
+     needs from the prices. */
+  margin-right: 6px;
+}
+
+.row-rank {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+  line-height: 1;
+}
+
+.row-gutter .pos {
+  width: 100%;
+  text-align: center;
+  padding: 2px 0;
 }
 
 .row-id {
@@ -327,6 +348,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* The name may truncate; the price badge beside it must not. */
+.row-name .tag {
+  flex: 0 0 auto;
 }
 
 .injury {
@@ -335,10 +364,20 @@
   font-weight: 700;
 }
 
-.row-meta {
+/* News line. One job, so it can afford to show the headline inline. */
+.row-scout {
   display: flex;
-  gap: 6px;
+  gap: 7px;
   align-items: center;
+  min-width: 0;
+}
+
+.row-scout-text {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pos {
@@ -370,11 +409,6 @@
 .tag.mine {
   background: var(--tint-green);
   color: var(--green);
-}
-
-.tag.gone {
-  background: var(--surface-2);
-  color: var(--muted);
 }
 
 .row-values {
@@ -816,6 +850,40 @@ hr {
   50% { opacity: 0.35; }
 }
 
+/* Every empty state — the action, the hint, the in-flight message — occupies
+   the same box, so swapping between them doesn't resize the row. */
+.scout-empty {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* No underline: it reads as a link to somewhere else, and the descenders made
+   the swap to plain text look like a jump. Accent colour carries it. */
+.scout-link {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.scout-link:active {
+  opacity: 0.6;
+}
+
+.scout-empty.error {
+  color: var(--amber);
+  gap: 10px;
+}
+
+.scout-empty.error .scout-link {
+  margin-left: auto;
+  color: inherit;
+}
+
 .scout-panel {
   margin: 0 14px 12px;
   padding: 11px 12px;
@@ -826,14 +894,6 @@ hr {
 
 /* No verdict-coloured edge: the chip already carries the signal, and two
    markers for one fact just competed with each other. */
-.scout-panel.muted { color: var(--muted); }
-
-.scout-panel.error {
-  color: var(--amber);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
 
 .scout-head {
   display: flex;

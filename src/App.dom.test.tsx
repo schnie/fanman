@@ -81,6 +81,20 @@ describe('draft board end to end', () => {
     expect(within(bar()).getByText('$200')).toBeInTheDocument() // still full budget
   })
 
+  it('marks a crossed-off player by striking the name, not with a badge', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<App adapter={new FakeAdapter()} />)
+    await openRow(user, 'Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    await user.click(screen.getByRole('button', { name: 'Hide taken' })) // show it again
+
+    const row = (await screen.findByText('Jahmyr Gibbs')).closest('.row')!
+    expect(row).toHaveClass('gone')
+    // The badge row is for things that describe the player; state is not one.
+    expect(within(row as HTMLElement).queryByText('Gone')).not.toBeInTheDocument()
+    expect(container.querySelector('.tag.gone')).toBeNull()
+  })
+
   it('winning a player moves budget, slots and max bid together', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
@@ -257,8 +271,15 @@ describe('draft board end to end', () => {
     expect(await screen.findAllByText('Risk')).not.toHaveLength(0)
 
     await user.click(screen.getByText('Jahmyr Gibbs'))
-    expect(screen.getByText(/Ruled out for Week 1/)).toBeInTheDocument()
-    expect(screen.getByText('Backup expected to start.')).toBeInTheDocument()
+
+    // Scoped to this row's panel: the fake gives every player the same
+    // headline, so a global query would also match the other rows' inline copy.
+    const panel = screen
+      .getByText('Jahmyr Gibbs')
+      .closest('.row')!
+      .querySelector('.scout-panel') as HTMLElement
+    expect(within(panel).getByText(/Ruled out for Week 1/)).toBeInTheDocument()
+    expect(within(panel).getByText('Backup expected to start.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Beat writer' })).toHaveAttribute(
       'href',
       'https://example.com/a',
@@ -285,7 +306,7 @@ describe('draft board end to end', () => {
     expect(await screen.findByText('Caution')).toBeInTheDocument()
     await user.click(screen.getByText('Jahmyr Gibbs'))
     expect(screen.getByText('Limited in practice Wednesday.')).toBeInTheDocument()
-    expect(screen.getByText(/^Checked /)).toBeInTheDocument()
+    expect(screen.getByText(/^Scouted /)).toBeInTheDocument()
 
     // Players with no cached report are still checked; the restored one is not
     // re-fetched, which is the whole saving.
@@ -297,7 +318,7 @@ describe('draft board end to end', () => {
     render(<App adapter={new FakeAdapter()} />)
     await user.click(await screen.findByText('Jahmyr Gibbs'))
 
-    expect(screen.getByText(/Add an API key in Settings/)).toBeInTheDocument()
+    expect(screen.getByText(/Add an API key in Settings to scout players/)).toBeInTheDocument()
   })
 
   it('does not scout anything until a key exists', async () => {
@@ -355,7 +376,7 @@ describe('draft board end to end', () => {
 
       expect(screen.getByText('Offline')).toBeInTheDocument()
       await user.click(screen.getByText('Jahmyr Gibbs'))
-      expect(screen.getByText(/Offline — news checks need a connection/)).toBeInTheDocument()
+      expect(screen.getByText(/Offline — scouting needs a connection/)).toBeInTheDocument()
     } finally {
       online.mockRestore()
     }
@@ -365,6 +386,28 @@ describe('draft board end to end', () => {
     render(<App adapter={new FakeAdapter()} />)
     await screen.findByText('Jahmyr Gibbs')
     expect(screen.queryByText('Offline')).not.toBeInTheDocument()
+  })
+
+  it('shows the headline inline when collapsed and only in the panel when open', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.scoutReports = [makeReport(1, { headline: 'Limited in practice Wednesday.' })]
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    // Collapsed: readable at a glance, without a tap.
+    expect(await screen.findByText('Limited in practice Wednesday.')).toBeInTheDocument()
+
+    const row = screen.getByText('Jahmyr Gibbs').closest('.row') as HTMLElement
+    expect(within(row).getByText('Clear')).toBeInTheDocument() // verdict chip
+
+    await user.click(screen.getByText('Jahmyr Gibbs'))
+
+    // Expanded: the panel carries both, so the row line must not repeat either.
+    expect(screen.getAllByText('Limited in practice Wednesday.')).toHaveLength(1)
+    expect(within(row).getAllByText('Clear')).toHaveLength(1)
+    expect(row.querySelector('.row-scout')).toBeNull()
   })
 
   it('filters the board by position', async () => {
