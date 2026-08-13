@@ -7,16 +7,27 @@ import type { DraftState, Player } from '../domain/types'
  * a fat-fingered $80 should be visible as a mistake, not discovered three picks
  * later.
  */
-export function BidSheet({ player, state, onConfirm, onCancel }: {
+export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, onCancel }: {
   player: Player
   state: DraftState
+  /** What this player is likely to actually cost, after inflation. */
+  roomPrice?: number
+  /** `sold` records someone else's winning bid; it is not our money. */
+  mode?: 'bid' | 'sold'
   onConfirm: (price: number) => void
   onCancel: () => void
 }) {
   const [raw, setRaw] = useState('')
   const price = raw === '' ? 0 : parseInt(raw, 10)
-  const valid = canBid(state, price)
-  const after = valid ? previewBid(state, player.id, price) : null
+  const sold = mode === 'sold'
+
+  // Recording a price sharpens the room's remaining money, but a fast auction
+  // won't always give you time — leaving it blank still crosses the player off.
+  const skipping = sold && raw === ''
+  // Someone else's bid is not constrained by our budget, and the keypad can
+  // only ever produce a whole number ≥ 1, so any input at all is valid.
+  const valid = sold ? !skipping : canBid(state, price)
+  const after = !sold && valid ? previewBid(state, player.id, price) : null
 
   const press = (digit: string) => setRaw((r) => (r.length >= 3 ? r : (r + digit).replace(/^0+/, '')))
 
@@ -27,6 +38,9 @@ export function BidSheet({ player, state, onConfirm, onCancel }: {
           <div className="sheet-player">{player.name}</div>
           <div className="sheet-sub">
             {player.position} · ESPN ${player.espnValue} · market ${player.marketValue}
+            {roomPrice !== undefined && roomPrice !== Math.round(player.marketValue) && (
+              <> · <strong>this room ~${roomPrice}</strong></>
+            )}
           </div>
         </div>
 
@@ -36,7 +50,9 @@ export function BidSheet({ player, state, onConfirm, onCancel }: {
         </div>
 
         <div className={`sheet-preview ${valid ? '' : 'invalid'}`}>
-          {after ? (
+          {sold ? (
+            skipping ? 'What did they sell for?' : 'Recorded against the room, not your budget'
+          ) : after ? (
             <>Leaves <strong>${after.remaining}</strong> for <strong>{after.slotsLeft}</strong> slots · new max <strong>${after.maxBid}</strong></>
           ) : raw === '' ? (
             'Enter the winning bid'
@@ -56,8 +72,12 @@ export function BidSheet({ player, state, onConfirm, onCancel }: {
 
         <div className="sheet-actions">
           <button className="act act-cancel" onClick={onCancel}>Cancel</button>
-          <button className="act act-mine" disabled={!valid} onClick={() => onConfirm(price)}>
-            Confirm ${price || 0}
+          <button
+            className={`act ${skipping ? 'act-skip' : 'act-mine'}`}
+            disabled={!sold && !valid}
+            onClick={() => onConfirm(skipping ? 0 : price)}
+          >
+            {skipping ? 'Skip' : sold ? `Sold for $${price}` : `Confirm $${price || 0}`}
           </button>
         </div>
       </div>

@@ -40,7 +40,7 @@ describe('buildLineup', () => {
   it('lays out an empty roster as the full starting lineup plus bench', () => {
     const lineup = buildLineup([], index(), 16)
     expect(labels(lineup.starters)).toEqual([
-      'QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'D/ST', 'K', 'HC',
+      'QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'OP', 'D/ST', 'K', 'HC',
     ])
     expect(lineup.bench).toHaveLength(16 - STARTER_SLOTS.length)
     expect(lineup.bench.every((b) => b.label === 'BE')).toBe(true)
@@ -67,17 +67,17 @@ describe('buildLineup', () => {
     expect(lineup.starters[2].player?.name).toBe('cheap-rb')
   })
 
-  it('overflows a surplus RB into FLEX', () => {
+  it('overflows a surplus RB into OP', () => {
     const rbs = [make('RB'), make('RB'), make('RB')]
     const lineup = buildLineup(rbs.map((r, i) => won(r, 30 - i)), index(), 16)
 
-    const flex = lineup.starters.find((s) => s.label === 'FLEX')
+    const flex = lineup.starters.find((s) => s.label === 'OP')
     expect(flex?.player?.name).toBe(rbs[2].name) // cheapest of the three
     expect(lineup.bench.every((b) => !b.pick)).toBe(true)
   })
 
-  it('fills dedicated slots before FLEX, so a lone TE is not stranded', () => {
-    // Regression: filling FLEX first with the only TE would leave the TE slot
+  it('fills dedicated slots before OP, so a lone TE is not stranded', () => {
+    // Regression: filling OP first with the only TE would leave the TE slot
     // empty while a WR sat on the bench.
     const te = make('TE', 'only-te')
     const wr1 = make('WR', 'wr-a')
@@ -92,17 +92,45 @@ describe('buildLineup', () => {
     )
 
     expect(lineup.starters.find((s) => s.label === 'TE')?.player?.name).toBe('only-te')
-    expect(lineup.starters.find((s) => s.label === 'FLEX')?.player?.name).toBe('wr-c')
+    expect(lineup.starters.find((s) => s.label === 'OP')?.player?.name).toBe('wr-c')
+  })
+
+  it('starts a second quarterback in OP', () => {
+    // The whole point of OP over FLEX: a second QB is a starter here, which is
+    // why quarterbacks are worth more in this league than ESPN's ranks imply.
+    const qbs = [make('QB', 'qb-a'), make('QB', 'qb-b')]
+    const lineup = buildLineup(qbs.map((q, i) => won(q, 20 - i)), index(), 17)
+
+    expect(lineup.starters.find((s) => s.label === 'QB')?.player?.name).toBe('qb-a')
+    expect(lineup.starters.find((s) => s.label === 'OP')?.player?.name).toBe('qb-b')
+    expect(lineup.bench.every((b) => !b.pick)).toBe(true)
   })
 
   it('benches players with no starting slot left', () => {
-    const qbs = [make('QB', 'qb-a'), make('QB', 'qb-b')]
-    const lineup = buildLineup(qbs.map((q, i) => won(q, 20 - i)), index(), 16)
+    const qbs = [make('QB', 'qb-a'), make('QB', 'qb-b'), make('QB', 'qb-c')]
+    const lineup = buildLineup(qbs.map((q, i) => won(q, 20 - i)), index(), 17)
 
-    expect(lineup.starters[0].player?.name).toBe('qb-a')
-    expect(names(lineup.bench)[0]).toBe('qb-b')
+    expect(lineup.starters.find((s) => s.label === 'QB')?.player?.name).toBe('qb-a')
+    expect(lineup.starters.find((s) => s.label === 'OP')?.player?.name).toBe('qb-b')
+    expect(names(lineup.bench)[0]).toBe('qb-c')
     // A benched QB is labelled by its position, not "BE".
     expect(lineup.bench[0].label).toBe('QB')
+  })
+
+  it('does not let OP swallow the only quarterback', () => {
+    // OP accepts QB, so a value-first pass could drop the lone quarterback
+    // into it and leave the QB slot empty. Dedicated slots fill first, so the
+    // QB starts at QB and the surplus running back takes OP.
+    const qb = make('QB', 'only-qb')
+    const rbs = [make('RB', 'rb-a'), make('RB', 'rb-b'), make('RB', 'rb-c')]
+    const lineup = buildLineup(
+      [won(qb, 5), won(rbs[0], 40), won(rbs[1], 30), won(rbs[2], 20)],
+      index(),
+      17,
+    )
+
+    expect(lineup.starters.find((s) => s.label === 'QB')?.player?.name).toBe('only-qb')
+    expect(lineup.starters.find((s) => s.label === 'OP')?.player?.name).toBe('rb-c')
   })
 
   it('gives the head coach its own slot and never confuses it with D/ST', () => {
@@ -115,13 +143,14 @@ describe('buildLineup', () => {
     expect(lineup.bench.every((b) => !b.pick)).toBe(true)
   })
 
-  it('keeps a coach out of FLEX', () => {
-    // FLEX accepts RB/WR/TE only — a coach must never be pulled into it, even
+  it('keeps a coach out of OP', () => {
+    // OP accepts offensive skill positions only — a coach must never be
+    // pulled into it, even
     // when it is the only unplaced player.
     const hc = make('HC', 'Bills Coach')
     const lineup = buildLineup([won(hc, 2)], index(), 17)
 
-    expect(lineup.starters.find((s) => s.label === 'FLEX')?.pick).toBeUndefined()
+    expect(lineup.starters.find((s) => s.label === 'OP')?.pick).toBeUndefined()
     expect(lineup.starters.find((s) => s.label === 'HC')?.player?.name).toBe('Bills Coach')
   })
 

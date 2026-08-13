@@ -9,11 +9,16 @@ export interface LineupSlot {
 }
 
 /**
- * What a FLEX slot will take. Exported because the board's FLEX filter must
- * agree with the lineup builder — a superflex league should be one edit here,
- * not two edits that can silently drift apart.
+ * What this league's OP ("offensive player") slot will take — any offensive
+ * skill position, **including quarterback**. That makes it superflex-shaped
+ * rather than a normal FLEX, which matters well beyond the label: a second
+ * startable QB slot raises quarterback value sharply, and ESPN's PPR ranks
+ * assume a one-QB league, so they systematically under-price QBs here.
+ *
+ * Exported because the board's OP filter must agree with the lineup builder —
+ * one edit, not two that can silently drift apart.
  */
-export const FLEX_POSITIONS = ['RB', 'WR', 'TE']
+export const OP_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
 /** ESPN's default starting lineup, in the order people read a roster. */
 export const STARTER_SLOTS: LineupSlot[] = [
@@ -23,7 +28,7 @@ export const STARTER_SLOTS: LineupSlot[] = [
   { id: 'WR1', label: 'WR', accepts: ['WR'] },
   { id: 'WR2', label: 'WR', accepts: ['WR'] },
   { id: 'TE', label: 'TE', accepts: ['TE'] },
-  { id: 'FLEX', label: 'FLEX', accepts: FLEX_POSITIONS },
+  { id: 'OP', label: 'OP', accepts: OP_POSITIONS },
   { id: 'DST', label: 'D/ST', accepts: ['D/ST'] },
   { id: 'K', label: 'K', accepts: ['K'] },
   // League-specific: a head coach slot, drafted like a D/ST (you pick a team).

@@ -398,7 +398,7 @@
 .pos-DST, .slot-DST { color: var(--pos-dst); }
 .pos-K, .slot-K { color: var(--pos-k); }
 .pos-HC, .slot-HC { color: var(--pos-hc); }
-.slot-FLEX { color: var(--pos-flex); }
+.slot-OP { color: var(--pos-op); }
 
 .tag {
   font-size: 11px;
@@ -456,6 +456,17 @@
   font-weight: 600;
 }
 
+/* The price this room will actually pay. Labelled, because an unlabelled
+   third number in a row of numbers is worse than no number. */
+.val-room {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* Direction only, and smaller than the premium: this is a tertiary signal that
    qualifies the gap rather than competing with it. */
 .trend {
@@ -498,6 +509,14 @@
 
 .act-clear,
 .act-cancel {
+  color: var(--muted);
+}
+
+/* Same slot as the confirm button, but visibly not the happy path — recording
+   the price is what we're nudging toward. */
+.act-skip {
+  background: var(--surface-2);
+  border-color: var(--line);
   color: var(--muted);
 }
 
@@ -852,6 +871,9 @@ hr {
 
 /* Every empty state — the action, the hint, the in-flight message — occupies
    the same box, so swapping between them doesn't resize the row. */
+/* A quiet inline link inside an expanded row. Shared by the scout's empty
+   states and the sold-price control — neither owns it. */
+.inline-action,
 .scout-empty {
   display: flex;
   align-items: center;
@@ -863,6 +885,7 @@ hr {
 
 /* No underline: it reads as a link to somewhere else, and the descenders made
    the swap to plain text look like a jump. Accent colour carries it. */
+.inline-link,
 .scout-link {
   padding: 0;
   font-size: 14px;
@@ -870,6 +893,7 @@ hr {
   color: var(--accent);
 }
 
+.inline-link:active,
 .scout-link:active {
   opacity: 0.6;
 }
@@ -879,7 +903,8 @@ hr {
   gap: 10px;
 }
 
-.scout-empty.error .scout-link {
+.scout-empty.error .inline-link,
+.scout-link {
   margin-left: auto;
   color: inherit;
 }

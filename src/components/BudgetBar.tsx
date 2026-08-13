@@ -1,14 +1,16 @@
 import type { BudgetSummary } from '../domain/budget'
+import { inflationIsMeaningful, type MarketState } from '../domain/market'
 
 /**
  * The permanent header. `maxBid` is deliberately the largest thing on screen —
  * it's the number you're staring at while someone counts down a bid.
  */
-export function BudgetBar({ summary, onUndo, canUndo, online }: {
+export function BudgetBar({ summary, onUndo, canUndo, online, market }: {
   summary: BudgetSummary
   onUndo: () => void
   canUndo: boolean
   online: boolean
+  market: MarketState
 }) {
   return (
     <header className="budget-bar">
@@ -34,6 +36,20 @@ export function BudgetBar({ summary, onUndo, canUndo, online }: {
           value={summary.slotsLeft ? `$${summary.avgPerSlot.toFixed(0)}` : '—'}
           secondary
         />
+        {/* How much real money is chasing each dollar of listed value. Above 1
+            means the sheet is under-pricing this room. */}
+        {inflationIsMeaningful(market.inflation) && (
+          <Stat
+            label="Room"
+            value={`×${market.inflation.toFixed(2)}${market.confident ? '' : '?'}`}
+            secondary
+            title={
+              market.confident
+                ? `$${market.moneyLeft} left chasing $${Math.round(market.valueLeft)} of listed value`
+                : 'Few players left — this figure is rough'
+            }
+          />
+        )}
         <button className="undo" onClick={onUndo} disabled={!canUndo} aria-label="Undo last action">
           Undo
         </button>
@@ -44,9 +60,14 @@ export function BudgetBar({ summary, onUndo, canUndo, online }: {
   )
 }
 
-function Stat({ label, value, secondary }: { label: string; value: string; secondary?: boolean }) {
+function Stat({ label, value, secondary, title }: {
+  label: string
+  value: string
+  secondary?: boolean
+  title?: string
+}) {
   return (
-    <div className={`stat ${secondary ? 'secondary' : ''}`}>
+    <div className={`stat ${secondary ? 'secondary' : ''}`} title={title}>
       <span className="stat-label">{label}</span>
       <span className="stat-value">{value}</span>
     </div>

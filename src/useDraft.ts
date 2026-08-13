@@ -33,8 +33,14 @@ export function useDraft(adapter: DataAdapter) {
     setState((prev) => ({ ...prev, log: [...prev.log, pick] }))
   }, [])
 
+  /**
+   * `price` is what the player actually sold for, when we caught it. 0 means
+   * unknown, and the room's spend is estimated from the market average
+   * instead — so crossing someone off stays a single tap.
+   */
   const markGone = useCallback(
-    (playerId: number) => append({ playerId, status: 'gone', price: 0, at: Date.now() }),
+    (playerId: number, price = 0) =>
+      append({ playerId, status: 'gone', price, at: Date.now() }),
     [append],
   )
 

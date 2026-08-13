@@ -92,9 +92,25 @@ export type PickStatus = 'gone' | 'mine'
 export interface Pick {
   playerId: number
   status: PickStatus
-  /** Always 0 for `gone` — only `mine` picks move the budget. */
+  /**
+   * Dollars, with three meanings by status — read it through `observedPrice`
+   * rather than testing it inline:
+   *   `mine`          what we paid.
+   *   `gone`, > 0     what we watched it sell for.
+   *   `gone`, 0       nobody caught the price; estimate it.
+   * Only `mine` picks move *our* budget; `gone` prices move the room's.
+   */
   price: number
   at: number
+}
+
+/**
+ * The price we actually know for a pick, or undefined when it was crossed off
+ * without one. The 0-means-unknown sentinel is a fact about the log's schema,
+ * so it is decoded here rather than re-derived in every consumer.
+ */
+export function observedPrice(pick: Pick): number | undefined {
+  return pick.price > 0 ? pick.price : undefined
 }
 
 export interface Settings {

@@ -64,6 +64,22 @@ async function openRow(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(await screen.findByText(name))
 }
 
+/** Cross a player off. Passing a price records it; omitting it skips. */
+async function crossOff(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  price?: number,
+) {
+  await openRow(user, name)
+  await user.click(screen.getByRole('button', { name: 'Gone' }))
+  if (price === undefined) {
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+    return
+  }
+  for (const d of String(price)) await user.click(screen.getByRole('button', { name: d }))
+  await user.click(screen.getByRole('button', { name: `Sold for $${price}` }))
+}
+
 describe('draft board end to end', () => {
   it('shows the opening max bid once rankings load', async () => {
     render(<App adapter={new FakeAdapter()} />)
@@ -74,18 +90,25 @@ describe('draft board end to end', () => {
   it('crossing a player off does not touch the budget', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await openRow(user, 'Jahmyr Gibbs')
-    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    await crossOff(user, 'Jahmyr Gibbs', 85)
 
     expect(maxBid()).toBe('$184')
     expect(within(bar()).getByText('$200')).toBeInTheDocument() // still full budget
   })
 
+  it('can cross a player off without a price when the auction is moving', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    render(<App adapter={adapter} />)
+    await crossOff(user, 'Jahmyr Gibbs')
+
+    expect(adapter.draft?.log.at(-1)).toMatchObject({ playerId: 1, status: 'gone', price: 0 })
+  })
+
   it('marks a crossed-off player by striking the name, not with a badge', async () => {
     const user = userEvent.setup()
     const { container } = render(<App adapter={new FakeAdapter()} />)
-    await openRow(user, 'Jahmyr Gibbs')
-    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    await crossOff(user, 'Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'Hide taken' })) // show it again
 
     const row = (await screen.findByText('Jahmyr Gibbs')).closest('.row')!
@@ -157,8 +180,7 @@ describe('draft board end to end', () => {
     const user = userEvent.setup()
     const adapter = new FakeAdapter()
     render(<App adapter={adapter} />)
-    await openRow(user, 'Jahmyr Gibbs')
-    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    await crossOff(user, 'Jahmyr Gibbs')
 
     expect(adapter.draft?.log).toEqual([
       expect.objectContaining({ playerId: 1, status: 'gone', price: 0 }),
@@ -217,7 +239,7 @@ describe('draft board end to end', () => {
 
     const slots = [...container.querySelectorAll('.slot')].map((el) => el.textContent)
     expect(slots.slice(0, 10)).toEqual([
-      'QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'D/ST', 'K', 'HC',
+      'QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'OP', 'D/ST', 'K', 'HC',
     ])
     expect(slots.slice(10).every((s) => s === 'BE')).toBe(true)
     expect(screen.getByText('Bench')).toBeInTheDocument()
@@ -408,6 +430,37 @@ describe('draft board end to end', () => {
     expect(screen.getAllByText('Limited in practice Wednesday.')).toHaveLength(1)
     expect(within(row).getAllByText('Clear')).toHaveLength(1)
     expect(row.querySelector('.row-scout')).toBeNull()
+  })
+
+  it('records what another team paid without touching our budget', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    render(<App adapter={adapter} />)
+
+    await crossOff(user, 'Jahmyr Gibbs', 85)
+
+    // Their money, not ours: our budget and max bid are untouched.
+    expect(maxBid()).toBe('$184')
+    expect(within(bar()).getByText('$200')).toBeInTheDocument()
+    expect(adapter.draft?.log.at(-1)).toMatchObject({ playerId: 1, status: 'gone', price: 85 })
+  })
+
+  it('lets a sold price exceed our own max bid', async () => {
+    // Another team's winning bid is not constrained by what we can afford.
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { budget: 20, slots: 17, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 1, status: 'gone', price: 0, at: 0 }],
+    }
+    render(<App adapter={adapter} />)
+    await screen.findByText('Puka Nacua')
+    await openRow(user, 'Puka Nacua')
+    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    for (const d of ['9', '9']) await user.click(screen.getByRole('button', { name: d }))
+
+    // Our max is $4; theirs can be anything.
+    expect(screen.getByRole('button', { name: 'Sold for $99' })).toBeEnabled()
   })
 
   it('filters the board by position', async () => {

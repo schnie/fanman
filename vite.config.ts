@@ -75,5 +75,9 @@ export default defineConfig(({ command }) => ({
     // Domain tests run in node; component tests opt into jsdom with a
     // `@vitest-environment jsdom` docblock at the top of the file.
     setupFiles: ['./src/test/setup.ts'],
+    // `.claude/worktrees/*` holds full checkouts of this repo. Without this,
+    // vitest runs a second, stale copy of the entire suite — inflating the
+    // count and reporting passes from code that isn't the code being changed.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 }))

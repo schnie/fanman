@@ -12,7 +12,8 @@ import { ScrollTopButton } from './components/ScrollTopButton'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
 import { useOnline } from './lib/useOnline'
-import { FLEX_POSITIONS } from './domain/lineup'
+import { OP_POSITIONS } from './domain/lineup'
+import { displayRoomPrice, summarizeMarket } from './domain/market'
 import type { Player } from './domain/types'
 import './App.css'
 
@@ -24,7 +25,7 @@ const TABS = [
 ] as const
 type Tab = (typeof TABS)[number][0]
 
-const FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'D/ST', 'HC'] as const
+const FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OP', 'K', 'D/ST', 'HC'] as const
 
 /**
  * `adapter` is injectable so the Wails shell can supply its own implementation
@@ -48,12 +49,25 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
     online,
   )
 
+  // Room-wide auction state: how much money is still chasing how much value.
+  const market = useMemo(
+    () => summarizeMarket(players, draft.picks, draft.state.settings),
+    [players, draft.picks, draft.state.settings],
+  )
+
   const [tab, setTab] = useState<Tab>('board')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL')
   const [hideTaken, setHideTaken] = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [bidding, setBidding] = useState<Player | null>(null)
+  /**
+   * One atom for "a price sheet is open", not one per flow. Two independent
+   * modal states meant nothing in the component knew a modal was open, and the
+   * scroll-to-top button silently started floating over the second one.
+   */
+  const [sheet, setSheet] = useState<{ player: Player; mode: 'bid' | 'sold' } | null>(null)
+  const openBid = useCallback((player: Player) => setSheet({ player, mode: 'bid' }), [])
+  const openSold = useCallback((player: Player) => setSheet({ player, mode: 'sold' }), [])
   const searchInput = useRef<HTMLInputElement>(null)
   const { sentinel, stuck } = useStuck<HTMLDivElement>()
   // Separate, much later trigger than the header's: a back-to-top button that
@@ -62,17 +76,10 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   const { sentinel: deepSentinel, stuck: scrolledDeep } = useStuck<HTMLDivElement>(700)
 
   // Hoisted out of the row map: fresh closures per row would defeat memo().
-  const { markGone, clearPlayer } = draft
+  const { clearPlayer } = draft
   const toggleRow = useCallback(
     (id: number) => setExpandedId((cur) => (cur === id ? null : id)),
     [],
-  )
-  const crossOff = useCallback(
-    (id: number) => {
-      markGone(id)
-      setExpandedId(null)
-    },
-    [markGone],
   )
   const unmark = useCallback(
     (id: number) => {
@@ -93,8 +100,8 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return players.filter((p) => {
-      if (filter === 'FLEX') {
-        if (!FLEX_POSITIONS.includes(p.position)) return false
+      if (filter === 'OP') {
+        if (!OP_POSITIONS.includes(p.position)) return false
       } else if (filter !== 'ALL' && p.position !== filter) return false
       if (hideTaken && draft.picks.has(p.id)) return false
       if (q && !p.name.toLowerCase().includes(q)) return false
@@ -123,6 +130,7 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           onUndo={draft.undo}
           canUndo={draft.state.log.length > 0}
           online={online}
+          market={market}
         />
 
         {tab === 'board' && (
@@ -202,9 +210,12 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
                 expanded={expandedId === p.id}
                 affordable={draft.summary.maxBid >= 1}
                 onToggle={toggleRow}
-                onGone={crossOff}
-                onBid={setBidding}
+                onBid={openBid}
                 onClear={unmark}
+                // Crossing off opens the keypad: the sale price is what keeps
+                // the room's remaining money honest. Skippable in one tap.
+                onPrice={openSold}
+                room={displayRoomPrice(p, market.inflation)}
                 onScout={scout.scoutNow}
                 scout={scout.reports.get(p.id)}
                 scouting={scout.pending.has(p.id)}
@@ -239,21 +250,25 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
         />
       )}
 
-      {bidding && (
+      {sheet && (
         <BidSheet
-          player={bidding}
+          player={sheet.player}
           state={draft.state}
-          onCancel={() => setBidding(null)}
+          mode={sheet.mode}
+          roomPrice={displayRoomPrice(sheet.player, market.inflation)}
+          onCancel={() => setSheet(null)}
           onConfirm={(price) => {
-            draft.markMine(bidding.id, price)
-            setBidding(null)
+            if (sheet.mode === 'bid') draft.markMine(sheet.player.id, price)
+            else draft.markGone(sheet.player.id, price)
+            setSheet(null)
             setExpandedId(null)
           }}
         />
       )}
 
-      {/* Hidden while the bid sheet is open — nothing should float over a modal. */}
-      <ScrollTopButton visible={scrolledDeep && !bidding} />
+      {/* Nothing should float over a modal — one predicate, so a third sheet
+          inherits the guard rather than quietly escaping it. */}
+      <ScrollTopButton visible={scrolledDeep && !sheet} />
 
       <nav className="tabs">
         {TABS.map(([id, label]) => (

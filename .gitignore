@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# Local Claude Code settings
-.claude/settings.local.json
+# Local Claude Code state — settings and any git worktrees it creates.
+.claude/

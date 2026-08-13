@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { isUnpriced, marketPremium, marketTrend, type Pick, type Player } from '../domain/types'
+import { isUnpriced, marketPremium, marketTrend, observedPrice, type Pick, type Player } from '../domain/types'
 import { posClass } from '../lib/format'
 import { ScoutChip, ScoutPanel } from './ScoutPanel'
 import type { ScoutReport } from '../domain/types'
@@ -14,10 +14,21 @@ export interface PlayerRowProps {
    * into stable `useCallback`s and `memo` below actually bites.
    */
   onToggle: (id: number) => void
-  onGone: (id: number) => void
   onBid: (player: Player) => void
   onClear: (id: number) => void
   onScout: (player: Player) => void
+  /**
+   * Opens the keypad to record a sale price — used both to cross a player off
+   * and to correct one afterwards. One prop, because it is one action.
+   */
+  onPrice: (player: Player) => void
+  /**
+   * Pre-rounded price for this room, or undefined when it matches the listed
+   * one. Passed already-computed rather than as an inflation multiplier: the
+   * multiplier changes on every pick, which would break `memo` for all ~230
+   * rows, while this dollar figure is unchanged for most of them.
+   */
+  room?: number
   scout?: ScoutReport
   scouting: boolean
   scoutError?: string
@@ -36,10 +47,11 @@ export const PlayerRow = memo(function PlayerRow({
   expanded,
   affordable,
   onToggle,
-  onGone,
   onBid,
   onClear,
   onScout,
+  onPrice,
+  room,
   scout,
   scouting,
   scoutError,
@@ -81,7 +93,7 @@ export const PlayerRow = memo(function PlayerRow({
         </span>
 
         <span className="row-values">
-          <PlayerValue player={player} />
+          <PlayerValue player={player} room={room} />
         </span>
       </button>
 
@@ -95,12 +107,25 @@ export const PlayerRow = memo(function PlayerRow({
             offline={offline}
             onScout={() => onScout(player)}
           />
+          {/* Recording what a player actually went for sharpens the room's
+              remaining money. Optional and out of the primary action row, so
+              crossing someone off stays one tap. */}
+          {pick?.status === 'gone' && (
+            <div className="inline-action">
+              <button className="inline-link" onClick={() => onPrice(player)}>
+                {observedPrice(pick) !== undefined
+                  ? `Sold for $${pick.price} — change`
+                  : 'Record what they sold for'}
+              </button>
+            </div>
+          )}
+
           <div className="row-actions">
             {taken ? (
               <button className="act act-clear" onClick={() => onClear(player.id)}>Un-mark</button>
             ) : (
               <>
-                <button className="act act-gone" onClick={() => onGone(player.id)}>Gone</button>
+                <button className="act act-gone" onClick={() => onPrice(player)}>Gone</button>
                 <button className="act act-mine" onClick={() => onBid(player)} disabled={!affordable}>
                   {affordable ? 'We got them' : 'No budget'}
                 </button>
@@ -114,7 +139,7 @@ export const PlayerRow = memo(function PlayerRow({
 })
 
 /** The value column, in priority order: ESPN's price, our estimate, or nothing. */
-function PlayerValue({ player }: { player: Player }) {
+function PlayerValue({ player, room }: { player: Player; room?: number }) {
   if (!isUnpriced(player)) {
     const premium = marketPremium(player)
     const trend = marketTrend(player)
@@ -136,6 +161,11 @@ function PlayerValue({ player }: { player: Player }) {
           {premium !== 0 && (
             <span className={premium > 0 ? 'prem up' : 'prem down'}>
               {premium > 0 ? '+' : ''}{premium}
+            </span>
+          )}
+          {room !== undefined && (
+            <span className="val-room" title="Likely price in this room, after inflation">
+              room ${room}
             </span>
           )}
         </span>
