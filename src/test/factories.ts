@@ -36,7 +36,6 @@ export function makeProfile(
     height: '5\' 9"',
     weight: '202 lbs',
     age: 24,
-    birthPlace: 'Dalton, GA',
     college: 'Alabama',
     draft: '2023: Rd 1, Pk 12 (DET)',
     experience: '4th Season',

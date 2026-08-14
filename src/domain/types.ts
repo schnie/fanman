@@ -172,7 +172,6 @@ export interface PlayerProfile {
   height: string | null
   weight: string | null
   age: number | null
-  birthPlace: string | null
   college: string | null
   /** ESPN's own phrasing: "2023: Rd 1, Pk 12 (DET)", or "Undrafted". */
   draft: string | null

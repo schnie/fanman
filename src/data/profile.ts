@@ -63,7 +63,6 @@ export function normalizeProfile(
     height: str(a.displayHeight),
     weight: str(a.displayWeight),
     age: typeof a.age === 'number' ? a.age : null,
-    birthPlace: str(a.displayBirthPlace),
     college: str(a.college?.name),
     draft: str(a.displayDraft),
     experience: str(a.displayExperience),

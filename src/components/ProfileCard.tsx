@@ -68,20 +68,24 @@ export function ProfileCard({ player, profile, loading, error, offline, onRetry 
       {background.length > 0 && <div className="profile-line">{background.join(' · ')}</div>}
 
       {profile.stats.length > 0 && (
-        <div className="profile-stats">
-          {profile.stats.map((s) => (
-            <div key={s.label} className="stat">
-              <span className="stat-value">{s.value}</span>
-              <span className="stat-label">{s.label}</span>
-              {/* ESPN's league rank. The number alone doesn't say whether 1,223
-                  rushing yards was good; "7th" does. */}
-              {s.rank && <span className="stat-rank">{s.rank}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-      {profile.statsLabel && profile.stats.length > 0 && (
-        <div className="profile-stats-label">{profile.statsLabel}</div>
+        <>
+          <div className="profile-stats">
+            {profile.stats.map((s) => (
+              <div key={s.label} className="profile-stat">
+                <span className="profile-stat-value">{s.value}</span>
+                <span className="profile-stat-label">{s.label}</span>
+                {/* ESPN's league rank. The number alone doesn't say whether 1,223
+                    rushing yards was good; "7th" does. */}
+                {s.rank && <span className="profile-stat-rank">{s.rank}</span>}
+              </div>
+            ))}
+          </div>
+          {/* Caption belongs to the row above it, so it lives inside the same
+              guard rather than restating it. */}
+          {profile.statsLabel && (
+            <div className="profile-stats-caption">{profile.statsLabel}</div>
+          )}
+        </>
       )}
 
       {profile.blurb && (

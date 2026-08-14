@@ -999,14 +999,17 @@ hr {
   display: none;
 }
 
-.stat {
+/* Prefixed, not `.stat*`: the budget bar owns those names up at the top of
+   this sheet, and a global stylesheet would have let these win the cascade
+   for the sticky header too. */
+.profile-stat {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-.stat-value {
+.profile-stat-value {
   font-size: 16px;
   font-weight: 700;
   color: var(--text);
@@ -1014,7 +1017,7 @@ hr {
   line-height: 1.2;
 }
 
-.stat-label {
+.profile-stat-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1022,16 +1025,16 @@ hr {
 
 /* The rank is the half that carries meaning — 1,223 yards means nothing until
    you know it was 7th — so it gets the accent and the label stays grey. */
-.stat-rank {
+.profile-stat-rank {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
 }
 
-.profile-stats-label {
+/* Caption under the row, not a per-stat label — hence `stats`, not `stat`. */
+.profile-stats-caption {
   margin-top: 5px;
   font-size: 11px;
-  color: var(--muted);
   opacity: 0.75;
 }
 

@@ -41,6 +41,11 @@ const TEAMS: Record<number, { abbr: string; name: string }> = {
   34: { abbr: 'HOU', name: 'Houston Texans' },
 }
 
+/**
+ * Exported for the tests rather than for callers: a dropped or duplicated key
+ * in a hand-transcribed 32-entry map is otherwise invisible until a crest goes
+ * missing mid-draft.
+ */
 export const TEAM_COUNT = Object.keys(TEAMS).length
 
 /** `null` for free agents (id 0) and anything ESPN adds that we don't know. */

@@ -55,8 +55,16 @@ export function useProfile(
     }
   }, [adapter])
 
+  /**
+   * Set only by a fetch that actually landed. Without it the rehydrate above
+   * would trip this effect on mount and write back, byte for byte, what it
+   * just read — a stringify and a synchronous localStorage write during
+   * startup to change nothing.
+   */
+  const dirty = useRef(false)
+
   useEffect(() => {
-    if (!loaded) return
+    if (!loaded || !dirty.current) return
     void adapter.saveProfiles([...profiles.values()])
   }, [profiles, loaded, adapter])
 
@@ -67,6 +75,7 @@ export function useProfile(
       setPending((prev) => setAdd(prev, target.id))
       try {
         const profile = await adapter.fetchProfile(target.id)
+        dirty.current = true
         setProfiles((prev) => mapSet(prev, target.id, profile))
         setErrors((prev) => mapRemove(prev, target.id))
       } catch (err) {

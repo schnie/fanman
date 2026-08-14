@@ -78,9 +78,13 @@ export class BrowserAdapter implements DataAdapter {
     // Bounded so a long session can't grow the cache without limit. These are
     // free to refetch, so evicting the least recently fetched costs a request
     // and nothing else — unlike the scout cache, which we never trim.
-    const trimmed = [...profiles]
-      .sort((a, b) => b.fetchedAt - a.fetchedAt)
-      .slice(0, MAX_CACHED_PROFILES)
+    // The cap almost never binds — a draft opens a few dozen rows — and this
+    // runs on the main thread just as the card is trying to paint, so the copy
+    // and sort are only paid for when there is actually something to evict.
+    const trimmed =
+      profiles.length <= MAX_CACHED_PROFILES
+        ? profiles
+        : [...profiles].sort((a, b) => b.fetchedAt - a.fetchedAt).slice(0, MAX_CACHED_PROFILES)
     write(KEY_PROFILE, trimmed)
   }
 

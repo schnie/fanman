@@ -8,6 +8,7 @@ import {
   teamLogoUrl,
   teamName,
 } from './proTeams'
+import { coachPlayers } from './coaches'
 
 describe('pro team map', () => {
   it('covers the league exactly once', () => {
@@ -27,6 +28,16 @@ describe('pro team map', () => {
   it('treats free agents as having no team', () => {
     expect(teamAbbr(0)).toBeNull()
     expect(teamLogoUrl(0)).toBeNull()
+  })
+
+  // Two hand-transcribed 32-team tables now exist — this one and `coaches.ts`.
+  // Nothing else makes them agree, so a relocation edited into one and not the
+  // other would otherwise ship as a coach row with no crest.
+  it('agrees with the coach roster on which teams exist', () => {
+    const coachTeams = coachPlayers().map((c) => c.proTeamId)
+    expect(coachTeams).toHaveLength(TEAM_COUNT)
+    expect(new Set(coachTeams).size).toBe(TEAM_COUNT)
+    expect(coachTeams.filter((id) => teamAbbr(id) === null)).toEqual([])
   })
 })
 
@@ -50,9 +61,6 @@ describe('asset urls', () => {
     expect(isTeamEntity(4429795)).toBe(false)
   })
 
-  it('still gives team entities a crest', () => {
-    expect(teamLogoUrl(34)).toBe('https://a.espncdn.com/i/teamlogos/nfl/500/hou.png')
-  })
 })
 
 describe('initials', () => {

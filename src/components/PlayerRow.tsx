@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { isUnpriced, marketPremium, marketTrend, observedPrice, type Pick, type Player } from '../domain/types'
 import { posClass } from '../lib/format'
-import { teamAbbr } from '../data/proTeams'
+import { isTeamEntity, teamAbbr } from '../data/proTeams'
 import { PlayerAvatar } from './PlayerAvatar'
 import { ProfileCard } from './ProfileCard'
 import { ScoutChip, ScoutPanel } from './ScoutPanel'
@@ -77,8 +77,9 @@ export const PlayerRow = memo(function PlayerRow({
   const taken = Boolean(pick)
   // Suppressed for D/ST and head coaches: "Texans D/ST · HOU" says the same
   // thing twice. Their avatar is the crest, which already carries the team.
-  const team =
-    player.position === 'D/ST' || player.position === 'HC' ? null : teamAbbr(player.proTeamId)
+  // Asked by id, like every other team-entity test in the feature — keying one
+  // of them off the position label instead would let the two notions drift.
+  const team = isTeamEntity(player.id) ? null : teamAbbr(player.proTeamId)
 
   return (
     <li className={`row ${pick?.status ?? ''} ${expanded ? 'expanded' : ''}`}>

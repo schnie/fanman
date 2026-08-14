@@ -42,6 +42,21 @@ describe.each(SHEETS)('%s', (file) => {
     expect(swallowed).toEqual([])
   })
 
+  it('defines no top-level selector twice', () => {
+    // These are single global sheets, so a second rule for a selector that
+    // already exists hundreds of lines earlier silently wins the cascade
+    // everywhere — including on components that never heard of the new
+    // feature. Caught after a profile card's `.stat*` rules quietly restyled
+    // the budget bar. Variants inside @media are exempt; those are the point.
+    const seen = new Map<string, number>()
+    root.walkRules((r) => {
+      if (r.parent?.type === 'atrule') return
+      const key = r.selector.replace(/\s+/g, ' ').trim()
+      seen.set(key, (seen.get(key) ?? 0) + 1)
+    })
+    expect([...seen].filter(([, n]) => n > 1).map(([sel]) => sel)).toEqual([])
+  })
+
   it('declares no property twice in the same rule', () => {
     // Splicing one block into another usually shows up here first.
     const clashes: string[] = []
