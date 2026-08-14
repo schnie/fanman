@@ -1,8 +1,11 @@
 import { memo } from 'react'
 import { isUnpriced, marketPremium, marketTrend, observedPrice, type Pick, type Player } from '../domain/types'
 import { posClass } from '../lib/format'
+import { teamAbbr } from '../data/proTeams'
+import { PlayerAvatar } from './PlayerAvatar'
+import { ProfileCard } from './ProfileCard'
 import { ScoutChip, ScoutPanel } from './ScoutPanel'
-import type { ScoutReport } from '../domain/types'
+import type { PlayerProfile, ScoutReport } from '../domain/types'
 
 export interface PlayerRowProps {
   player: Player
@@ -34,6 +37,15 @@ export interface PlayerRowProps {
   scoutError?: string
   hasKey: boolean
   offline?: boolean
+  /**
+   * Only ever populated for the expanded row — profiles are fetched on open.
+   * For every other row these stay `undefined`/`false`, so they compare equal
+   * and `memo` still holds across a profile arriving.
+   */
+  profile?: PlayerProfile
+  profileLoading: boolean
+  profileError?: string
+  onRetryProfile: (player: Player) => void
 }
 
 /**
@@ -57,8 +69,16 @@ export const PlayerRow = memo(function PlayerRow({
   scoutError,
   hasKey,
   offline,
+  profile,
+  profileLoading,
+  profileError,
+  onRetryProfile,
 }: PlayerRowProps) {
   const taken = Boolean(pick)
+  // Suppressed for D/ST and head coaches: "Texans D/ST · HOU" says the same
+  // thing twice. Their avatar is the crest, which already carries the team.
+  const team =
+    player.position === 'D/ST' || player.position === 'HC' ? null : teamAbbr(player.proTeamId)
 
   return (
     <li className={`row ${pick?.status ?? ''} ${expanded ? 'expanded' : ''}`}>
@@ -72,9 +92,15 @@ export const PlayerRow = memo(function PlayerRow({
           <span className={`pos pos-${posClass(player.position)}`}>{player.position}</span>
         </span>
 
+        <PlayerAvatar player={player} />
+
         <span className="row-id">
           <span className="row-name">
             {player.name}
+            {/* Which team someone plays for is half of knowing who they are,
+                and it was the one identifier the row already had in hand and
+                never showed. */}
+            {team && <span className="row-team">{team}</span>}
             {player.injured && <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>}
             {/* "Mine" keeps a badge because it carries the price. "Gone" is
                 pure state, so the name is struck through instead. */}
@@ -99,6 +125,14 @@ export const PlayerRow = memo(function PlayerRow({
 
       {expanded && (
         <>
+          <ProfileCard
+            player={player}
+            profile={profile}
+            loading={profileLoading}
+            error={profileError}
+            offline={offline}
+            onRetry={() => onRetryProfile(player)}
+          />
           <ScoutPanel
             report={scout}
             loading={scouting}

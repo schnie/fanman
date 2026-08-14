@@ -1,4 +1,4 @@
-import type { DraftState, Player, ScoutReport, Scoring } from '../domain/types'
+import type { DraftState, Player, PlayerProfile, ScoutReport, Scoring } from '../domain/types'
 
 export interface CachedRankings {
   players: Player[]
@@ -31,6 +31,16 @@ export interface DataAdapter {
 
   /** Live news check. Rejects with a `ScoutError` when it can't answer. */
   scoutPlayer(player: Player): Promise<ScoutReport>
+
+  /** Free, deterministic ESPN bio + stat line + Rotowire note. Throws for team entities. */
+  fetchProfile(playerId: number): Promise<PlayerProfile>
+
+  /**
+   * Cached separately from scout reports: these cost nothing to refetch, so
+   * they are a latency cache rather than something we must not lose.
+   */
+  loadProfiles(): Promise<PlayerProfile[]>
+  saveProfiles(profiles: PlayerProfile[]): Promise<void>
 
   /**
    * Scout reports survive a refresh. Each one costs money and ~20s, so losing

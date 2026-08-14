@@ -148,6 +148,48 @@ export function emptyDraft(settings: Settings = DEFAULT_SETTINGS): DraftState {
   return { settings, log: [] }
 }
 
+/** One line of ESPN's own season stat summary, with its league rank where published. */
+export interface StatLine {
+  label: string
+  value: string
+  /** e.g. "7th", "Tied-11th". Null when ESPN ranks nothing for this stat. */
+  rank: string | null
+}
+
+/**
+ * The deterministic half of what we know about a player: who they are, where
+ * they play, what they did last season, and Rotowire's latest dated note.
+ *
+ * Deliberately distinct from `ScoutReport`. A profile is free, reproducible,
+ * and always the same for everyone who asks; a scout report costs money, takes
+ * ~20s and is a model's reading of the news. Keeping them apart means a
+ * profile can never be mistaken for — or silently substituted for — a scout.
+ */
+export interface PlayerProfile {
+  playerId: number
+  team: string | null
+  jersey: string | null
+  height: string | null
+  weight: string | null
+  age: number | null
+  birthPlace: string | null
+  college: string | null
+  /** ESPN's own phrasing: "2023: Rd 1, Pk 12 (DET)", or "Undrafted". */
+  draft: string | null
+  experience: string | null
+  /** "Active", "Injured Reserve", "Suspension"… */
+  status: string | null
+  statsLabel: string | null
+  stats: StatLine[]
+  /**
+   * Rotowire's most recent note. Carries its own publish date because a
+   * profile can outlive its blurb — an undated blurb would read as current
+   * however old it is.
+   */
+  blurb: { headline: string; story: string; published: string } | null
+  fetchedAt: number
+}
+
 /** Single source for the verdict set — also handed to the model as a schema enum. */
 export const VERDICTS = ['GREEN', 'CAUTION', 'RED'] as const
 export type Verdict = (typeof VERDICTS)[number]

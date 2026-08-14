@@ -4,9 +4,9 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import type { CachedRankings, DataAdapter } from './data/adapter'
-import type { DraftState, Player, ScoutReport } from './domain/types'
+import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
-import { makePlayer, makeReport } from './test/factories'
+import { makePlayer, makeProfile, makeReport } from './test/factories'
 
 const player = (id: number, name: string, rank: number, position = 'RB'): Player =>
   makePlayer({ id, name, position, rank, adp: rank, marketValue: 52, percentOwned: 99 })
@@ -54,6 +54,17 @@ class FakeAdapter implements DataAdapter {
   /** Overridden per-test where the scout is the thing under test. */
   scoutPlayer = async (_player: Player): Promise<ScoutReport> => {
     throw new ScoutError('No API key set — add one in Settings', 'auth')
+  }
+  profiles: PlayerProfile[] = []
+  async loadProfiles() {
+    return this.profiles
+  }
+  async saveProfiles(p: PlayerProfile[]) {
+    this.profiles = p
+  }
+  /** Overridden per-test where the profile is the thing under test. */
+  fetchProfile = async (_playerId: number): Promise<PlayerProfile> => {
+    throw new Error('offline')
   }
 }
 
@@ -471,5 +482,160 @@ describe('draft board end to end', () => {
     await user.click(screen.getByRole('button', { name: 'QB' }))
     expect(screen.getByText('Josh Allen')).toBeInTheDocument()
     expect(screen.queryByText('Jahmyr Gibbs')).not.toBeInTheDocument()
+  })
+})
+
+describe('player profiles', () => {
+  /** A board with a D/ST and a head coach alongside the athletes. */
+  class ProfileAdapter extends FakeAdapter {
+    fetched: number[] = []
+    override fetchRankings = async () => [
+      ...ROSTER,
+      makePlayer({ id: -16034, name: 'Texans D/ST', position: 'D/ST', proTeamId: 34, rank: 4 }),
+      makePlayer({ id: -14001, name: 'Dan Campbell', position: 'HC', proTeamId: 8, rank: 5 }),
+    ]
+    override fetchProfile = async (playerId: number) => {
+      this.fetched.push(playerId)
+      return makeProfile(playerId, {
+        blurb: { headline: 'Signed an extension.', story: 'Three years.', published: 'Thu Aug 06' },
+      })
+    }
+  }
+
+  it('shows the team on every row without a fetch', async () => {
+    // Tier 1: the row already knows the pro team id, so this costs nothing.
+    const adapter = new ProfileAdapter()
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    expect(screen.getAllByText('ATL').length).toBeGreaterThan(0)
+    expect(adapter.fetched).toEqual([])
+  })
+
+  it('suppresses the team abbreviation for D/ST and coaches', async () => {
+    // "Texans D/ST · HOU" says the same thing twice; the crest carries it.
+    render(<App adapter={new ProfileAdapter()} />)
+    const row = (await screen.findByText('Texans D/ST')).closest('.row') as HTMLElement
+    expect(row.querySelector('.row-team')).toBeNull()
+  })
+
+  it('fetches a profile only when the row is opened', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    expect(adapter.fetched).toEqual([])
+
+    await openRow(user, 'Jahmyr Gibbs')
+
+    expect(
+      await screen.findByText('Alabama · 4th Season · 2023: Rd 1, Pk 12 (DET)'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Detroit Lions · #0')).toBeInTheDocument()
+    expect(screen.getByText('1,223')).toBeInTheDocument()
+    expect(screen.getByText('7th')).toBeInTheDocument()
+    expect(screen.getByText('Signed an extension.')).toBeInTheDocument()
+    expect(adapter.fetched).toEqual([1])
+  })
+
+  it('needs no API key — the profile is free where the scout is not', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    adapter.apiKey = null
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+
+    expect(await screen.findByText('Detroit Lions · #0')).toBeInTheDocument()
+    // ...while the scout, in the same open row, still asks for a key.
+    expect(screen.getByText(/API key/i)).toBeInTheDocument()
+  })
+
+  it('never asks ESPN for a D/ST or a head coach', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    render(<App adapter={adapter} />)
+    await screen.findByText('Texans D/ST')
+
+    await openRow(user, 'Texans D/ST')
+    expect(screen.getByText('Houston Texans')).toBeInTheDocument()
+    await openRow(user, 'Dan Campbell')
+    expect(screen.getByText('Detroit Lions')).toBeInTheDocument()
+
+    // There is no athlete record behind either id — asking would just 404.
+    expect(adapter.fetched).toEqual([])
+  })
+
+  it('serves a cached profile without going back to ESPN', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    adapter.profiles = [makeProfile(1, { college: 'Cached U' })]
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+
+    expect(await screen.findByText(/Cached U/)).toBeInTheDocument()
+    expect(adapter.fetched).toEqual([])
+  })
+
+  it('refetches once the cached profile has gone stale', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    adapter.profiles = [makeProfile(1, { college: 'Cached U', fetchedAt: 1 })]
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+
+    expect(await screen.findByText(/Alabama/)).toBeInTheDocument()
+    expect(adapter.fetched).toEqual([1])
+  })
+
+  it('offers a retry after a failure, and does not spin in the meantime', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    let calls = 0
+    adapter.fetchProfile = async (playerId: number) => {
+      calls += 1
+      if (calls === 1) throw new Error('ESPN is unreachable')
+      return makeProfile(playerId)
+    }
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+
+    expect(await screen.findByText('ESPN is unreachable')).toBeInTheDocument()
+    // A dead endpoint must not re-fire on every render of the open row.
+    expect(calls).toBe(1)
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByText('Detroit Lions · #0')).toBeInTheDocument()
+    expect(calls).toBe(2)
+  })
+
+  it('says it is offline rather than failing obscurely', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      render(<App adapter={adapter} />)
+      await screen.findByText('Jahmyr Gibbs')
+      await openRow(user, 'Jahmyr Gibbs')
+
+      expect(screen.getByText('Offline — profile unavailable.')).toBeInTheDocument()
+      expect(adapter.fetched).toEqual([])
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('persists a fetched profile for the next open', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+    await screen.findByText('Detroit Lions · #0')
+
+    expect(adapter.profiles.map((p) => p.playerId)).toEqual([1])
   })
 })

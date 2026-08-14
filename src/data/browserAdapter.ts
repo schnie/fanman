@@ -1,6 +1,7 @@
 import type { CachedRankings, DataAdapter } from './adapter'
 import { fetchRankings } from './espn'
-import type { DraftState, Player, ScoutReport, Scoring } from '../domain/types'
+import type { DraftState, Player, PlayerProfile, ScoutReport, Scoring } from '../domain/types'
+import { fetchProfile } from './profile'
 import { scoutPlayer } from './scout'
 import { ScoutError } from './scoutError'
 
@@ -8,6 +9,10 @@ const KEY_RANKINGS = 'fanman.rankings.v1'
 const KEY_DRAFT = 'fanman.draft.v1'
 const KEY_API = 'fanman.apiKey.v1'
 const KEY_SCOUT = 'fanman.scout.v1'
+const KEY_PROFILE = 'fanman.profile.v1'
+
+/** ~1KB each, so this is well under quota even alongside the rankings cache. */
+const MAX_CACHED_PROFILES = 150
 
 /**
  * Browser implementation. State lives in localStorage: the draft log is tiny,
@@ -59,6 +64,24 @@ export class BrowserAdapter implements DataAdapter {
 
   async saveScoutReports(reports: ScoutReport[]): Promise<void> {
     write(KEY_SCOUT, reports)
+  }
+
+  fetchProfile(playerId: number): Promise<PlayerProfile> {
+    return fetchProfile(playerId)
+  }
+
+  async loadProfiles(): Promise<PlayerProfile[]> {
+    return read<PlayerProfile[]>(KEY_PROFILE) ?? []
+  }
+
+  async saveProfiles(profiles: PlayerProfile[]): Promise<void> {
+    // Bounded so a long session can't grow the cache without limit. These are
+    // free to refetch, so evicting the least recently fetched costs a request
+    // and nothing else — unlike the scout cache, which we never trim.
+    const trimmed = [...profiles]
+      .sort((a, b) => b.fetchedAt - a.fetchedAt)
+      .slice(0, MAX_CACHED_PROFILES)
+    write(KEY_PROFILE, trimmed)
   }
 
   async scoutPlayer(player: Player): Promise<ScoutReport> {

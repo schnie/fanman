@@ -3,6 +3,7 @@ import { BrowserAdapter } from './data/browserAdapter'
 import type { DataAdapter } from './data/adapter'
 import { useDraft, useRankings } from './useDraft'
 import { useScout } from './useScout'
+import { useProfile } from './useProfile'
 import { BudgetBar } from './components/BudgetBar'
 import { PlayerRow } from './components/PlayerRow'
 import { BidSheet } from './components/BidSheet'
@@ -69,6 +70,15 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   const openBid = useCallback((player: Player) => setSheet({ player, mode: 'bid' }), [])
   const openSold = useCallback((player: Player) => setSheet({ player, mode: 'sold' }), [])
   const searchInput = useRef<HTMLInputElement>(null)
+
+  // Profiles are free, so unlike the scout this needs no key, no spend dial and
+  // no pre-warm — it just follows whichever row is open.
+  const expandedPlayer = useMemo(
+    () => (expandedId === null ? null : (players.find((p) => p.id === expandedId) ?? null)),
+    [players, expandedId],
+  )
+  const profile = useProfile(adapter, expandedPlayer, online)
+
   const { sentinel, stuck } = useStuck<HTMLDivElement>()
   // Separate, much later trigger than the header's: a back-to-top button that
   // showed up after one flick of the thumb would be noise. Short pages never
@@ -222,6 +232,10 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
                 scoutError={scout.errors.get(p.id)}
                 hasKey={scout.hasKey && online}
                 offline={!online}
+                profile={profile.profiles.get(p.id)}
+                profileLoading={profile.pending.has(p.id)}
+                profileError={profile.errors.get(p.id)}
+                onRetryProfile={profile.retry}
               />
             ))}
           </ul>
