@@ -794,6 +794,30 @@
   text-align: right;
 }
 
+/* The scoring select sits directly under three number inputs and has to line
+   up with them. It already shares every dimension in the rule above, but a
+   `menulist` select is drawn by the platform: Safari applies its own intrinsic
+   height, ignores the padding outright, and lands a few pixels short of the
+   inputs. Dropping the native appearance makes it an ordinary box that honours
+   the shared sizing on every browser.
+
+   The trade is the platform chevron, which stops being drawn — so it is
+   reinstated below, inline to avoid a request. `height` is set alongside
+   `min-height` because a select has no content box to grow, and Firefox
+   otherwise leaves it at its intrinsic height. */
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 46px;
+  /* Clear of the chevron, so a right-aligned label cannot run into it. */
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b949e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
 .field-note {
   font-size: 13px;
   color: var(--muted);

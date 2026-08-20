@@ -72,6 +72,47 @@ describe.each(SHEETS)('%s', (file) => {
   })
 })
 
+describe('settings fields line up', () => {
+  const root = postcss.parse(readFileSync('src/App.css', 'utf8'), { from: 'src/App.css' })
+
+  const declsFor = (selector: string): Map<string, string> => {
+    const out = new Map<string, string>()
+    root.walkRules((r) => {
+      if (r.selector.replace(/\s+/g, ' ').trim() !== selector) return
+      r.walkDecls((d) => {
+        out.set(d.prop, d.value)
+      })
+    })
+    return out
+  }
+
+  const shared = declsFor('.field input, .field select')
+  const select = declsFor('.field select')
+
+  it('gives the scoring select the same height as the number inputs', () => {
+    // The select carries its own `height` because a `menulist` control is sized
+    // by the platform and ignores the shared `min-height`. That makes 46px a
+    // number written in two rules, so changing one and not the other puts the
+    // dropdown back out of line with the inputs above it — which is the exact
+    // thing this was fixing.
+    expect(shared.get('min-height')).toBe('46px')
+    expect(select.get('height')).toBe(shared.get('min-height'))
+  })
+
+  it('keeps the select opted out of native rendering', () => {
+    // Without this the height above is advisory: Safari draws its own box,
+    // ignores the padding, and lands short of the inputs.
+    expect(select.get('appearance')).toBe('none')
+    expect(select.get('-webkit-appearance')).toBe('none')
+  })
+
+  it('draws its own chevron once the native one is gone', () => {
+    // Opting out of `menulist` also removes the arrow, leaving a control that
+    // does not read as a dropdown at all.
+    expect(select.get('background-image')).toMatch(/^url\("data:image\/svg\+xml,/)
+  })
+})
+
 describe('class references', () => {
   it('every class used in a component has a rule, and vice versa', async () => {
     // Not enforced as an assertion — unused rules are cheap and some classes
