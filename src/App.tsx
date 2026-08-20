@@ -12,6 +12,7 @@ import { SettingsPane } from './components/SettingsPane'
 import { ScrollTopButton } from './components/ScrollTopButton'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
+import { useScrollAnchor } from './lib/useScrollAnchor'
 import { useOnline } from './lib/useOnline'
 import { OP_POSITIONS } from './domain/lineup'
 import { displayRoomPrice, summarizeMarket } from './domain/market'
@@ -87,9 +88,16 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
 
   // Hoisted out of the row map: fresh closures per row would defeat memo().
   const { clearPlayer } = draft
+  // Opening a row closes whichever one was already open. When that one sits
+  // above the tap, the page loses its height from above and everything below
+  // jumps up — so hold the tapped row still across the swap.
+  const anchorRow = useScrollAnchor(expandedId)
   const toggleRow = useCallback(
-    (id: number) => setExpandedId((cur) => (cur === id ? null : id)),
-    [],
+    (id: number) => {
+      anchorRow(id)
+      setExpandedId((cur) => (cur === id ? null : id))
+    },
+    [anchorRow],
   )
   const unmark = useCallback(
     (id: number) => {

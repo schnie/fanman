@@ -492,6 +492,60 @@ describe('draft board end to end', () => {
     expect(screen.getByRole('button', { name: 'Sold for $99' })).toBeEnabled()
   })
 
+  it('holds a tapped row still when the row closing above it was expanded', async () => {
+    // The hook's own tests drive a stand-in accordion; this one checks the
+    // wiring — that App anchors the tap and the rows are findable — through
+    // the real board.
+    //
+    // jsdom has no layout, so stand one up from the DOM itself: rows are 60px,
+    // an expanded row is 300px taller, and a row's top is the sum of what
+    // precedes it. That yields the real before/after values on its own.
+    const rectSpy = vi
+      .spyOn(Element.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: Element) {
+        const el = this as HTMLElement
+        if (el.dataset.rowAnchor === undefined) return { top: 0 } as DOMRect
+        let top = 0
+        for (const row of document.querySelectorAll('[data-row-anchor]')) {
+          if (row === el) break
+          top += 60 + (row.classList.contains('expanded') ? 300 : 0)
+        }
+        return { top } as DOMRect
+      })
+    const scrollBy = vi.fn()
+    vi.stubGlobal('scrollBy', scrollBy)
+
+    try {
+      const user = userEvent.setup()
+      render(<App adapter={new FakeAdapter()} />)
+      await screen.findByText('Jahmyr Gibbs')
+
+      await openRow(user, 'Jahmyr Gibbs')
+      scrollBy.mockClear()
+
+      // Nacua sits below Gibbs, at 60 + 300 while Gibbs is open and at 60 once
+      // he closes. Untouched, its header would leap 300px up the screen.
+      await openRow(user, 'Puka Nacua')
+
+      expect(scrollBy).toHaveBeenCalledWith(0, -300)
+    } finally {
+      rectSpy.mockRestore()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('marks every row so the scroll anchor can find it again', async () => {
+    // useScrollAnchor locates the tapped row by this attribute after the
+    // accordion has moved. Drop it and the hook degrades silently: no error,
+    // no test failure anywhere else, just the jump coming back on a phone.
+    render(<App adapter={new FakeAdapter()} />)
+    const gibbs = await screen.findByText('Jahmyr Gibbs')
+
+    const row = gibbs.closest('.row')!
+    expect(row.getAttribute('data-row-anchor')).toBe('1')
+    expect(document.querySelectorAll('[data-row-anchor]')).toHaveLength(ROSTER.length)
+  })
+
   it('filters the board by position', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
