@@ -167,7 +167,31 @@ It runs `npm run check` first, so nothing ships without typecheck, tests and
 lint passing. The offline suite makes no network calls, so CI never touches
 ESPN or spends anything on the API.
 
-One-time setup on GitHub: **Settings → Pages → Source → GitHub Actions**.
+### First-time setup
+
+The remote is `https://github.com/schnie/fanman.git`, wired up as `origin`.
+Pushing `main` is what triggers a deploy:
+
+```bash
+git push -u origin main
+```
+
+The repo must be **public** for Pages on the free tier — see the note below.
+Then, once, in the GitHub UI:
+
+**Settings → Pages → Source → GitHub Actions**
+
+That switch cannot be skipped. Until it is flipped, the run gets all the way
+through typecheck, tests and build and then dies on the `configure-pages` step
+with `Get Pages site failed` — which reads like a build problem and isn't.
+After that, every push to `main` publishes to:
+
+```
+https://schnie.github.io/fanman/
+```
+
+Watch the first run with `gh run watch`. A cold build-plus-deploy is a couple
+of minutes.
 
 The base path is derived from the repository name automatically. For a user
 page (`<user>.github.io`) or a custom domain, set `VITE_BASE=/` in the
@@ -177,12 +201,27 @@ Free-tier Pages requires the repo be public. Nothing sensitive is in it: the
 API key is entered at runtime and stored on your device, and draft state never
 leaves the browser.
 
+### Draft day
+
+Do this the night before, not in the parking lot:
+
+1. Open `https://schnie.github.io/fanman/` on the phone you'll actually draft
+   with, and **Add to Home Screen**. This is the load that installs the service
+   worker — without it there is nothing cached and a dead venue wifi is fatal.
+2. Enter the Anthropic API key in Settings **on that phone**. The key is stored
+   per-device in localStorage, so a key typed on the laptop does not travel to
+   the phone.
+3. Pull rankings once while on good wifi, so the localStorage copy and its
+   timestamp are populated.
+4. Turn wifi and cell off and reopen from the home screen. The board should
+   come up with the **Offline** marker in the header. That is the real check —
+   everything except the scout and a rankings refresh works from there.
+
 ## Status
 
 Working: board, search, position and FLEX filters, cross-off, win-with-bid,
 budget math, undo, positional roster with bench divider, head coaches with
-FPI-derived values, settings, persistence, offline fallback, and the scout.
+FPI-derived values, settings, persistence, offline fallback, the scout,
+player profiles, and a GitHub Pages deploy.
 
-Next: pick a deployment target (PWA or Wails) and harden offline — service
-worker, cold start from cache, airplane-mode check. Then rehearse a full mock
-draft on the phone. See PLAN.md §7.
+Next: rehearse a full mock draft on the phone. See PLAN.md §7.
