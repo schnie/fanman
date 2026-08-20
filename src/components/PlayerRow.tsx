@@ -125,15 +125,22 @@ export const PlayerRow = memo(function PlayerRow({
       </button>
 
       {expanded && (
-        <>
-          <ProfileCard
-            player={player}
-            profile={profile}
-            loading={profileLoading}
-            error={profileError}
-            offline={offline}
-            onRetry={() => onRetryProfile(player)}
-          />
+        <div className="row-detail">
+          {/* The profile is fetched on open and can take a second or two on a
+              cell connection, so its box is reserved at the height the bio and
+              season stats will occupy. Without it the panel opened one line
+              tall and then grew by most of a screen, shoving the action
+              buttons out from under a thumb already on its way to them. */}
+          <div className={`profile-slot${isTeamEntity(player.id) ? ' profile-slot-bare' : ''}`}>
+            <ProfileCard
+              player={player}
+              profile={profile}
+              loading={profileLoading}
+              error={profileError}
+              offline={offline}
+              onRetry={() => onRetryProfile(player)}
+            />
+          </div>
           <ScoutPanel
             report={scout}
             loading={scouting}
@@ -167,7 +174,7 @@ export const PlayerRow = memo(function PlayerRow({
               </>
             )}
           </div>
-        </>
+        </div>
       )}
     </li>
   )

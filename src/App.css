@@ -554,6 +554,24 @@
 
 
 
+/* Everything revealed by tapping a row, as one animation target.
+
+   Opacity and transform only — deliberately not height. An accordion that
+   animates its own height reflows every row below it on each frame, and this
+   list is ~230 rows on a phone; the cure would cost more than the pop it
+   replaced. Fading the detail in over its final position reads as opening
+   without moving anything. */
+.row-detail {
+  animation: detail-in 150ms ease-out;
+}
+
+@keyframes detail-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
 .row-actions {
   display: flex;
   gap: 10px;
@@ -794,6 +812,30 @@
   text-align: right;
 }
 
+/* The scoring select sits directly under three number inputs and has to line
+   up with them. It already shares every dimension in the rule above, but a
+   `menulist` select is drawn by the platform: Safari applies its own intrinsic
+   height, ignores the padding outright, and lands a few pixels short of the
+   inputs. Dropping the native appearance makes it an ordinary box that honours
+   the shared sizing on every browser.
+
+   The trade is the platform chevron, which stops being drawn — so it is
+   reinstated below, inline to avoid a request. `height` is set alongside
+   `min-height` because a select has no content box to grow, and Firefox
+   otherwise leaves it at its intrinsic height. */
+.field select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 46px;
+  /* Clear of the chevron, so a right-aligned label cannot run into it. */
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238b949e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
 .field-note {
   font-size: 13px;
   color: var(--muted);
@@ -982,6 +1024,58 @@ hr {
 .scout-link {
   margin-left: auto;
   color: inherit;
+}
+
+/* Holds the profile through every state it passes through — skeleton, error,
+   card — so the box stops changing size once the row is open.
+
+   144px is what the deterministic half occupies: three bio lines at 13px/1.45
+   with 3px gaps (~63), the season-stat row (~60), and its caption (~21). The
+   Rotowire blurb is deliberately NOT reserved; it is the part that varies most
+   in both presence and length, and over-reserving would trade a jump down for
+   a permanent hole under players who have no news. So a profile can still grow
+   past this, but it can never shrink into it — the buttons below only ever
+   settle downward, and by far less than the ~230px they used to travel. */
+.profile-slot {
+  min-height: 144px;
+}
+
+/* D/ST and head coaches have no athlete record to fetch, so there is no wait
+   to cover and nothing to reserve — just the team name. */
+.profile-slot-bare {
+  min-height: 0;
+}
+
+/* Same classes as the real card, so the placeholder inherits its metrics
+   instead of restating them. */
+.sk {
+  display: inline-block;
+  vertical-align: middle;
+  height: 0.75em;
+  border-radius: 3px;
+  background: var(--surface-2);
+  /* Borrowed from the scout chip: one idea of what "waiting" looks like. */
+  animation: scout-pulse 1.2s ease-in-out infinite;
+}
+
+.sk-wide {
+  width: 46%;
+}
+
+.sk-mid {
+  width: 62%;
+}
+
+.sk-narrow {
+  width: 38%;
+}
+
+.sk-stat {
+  width: 34px;
+}
+
+.sk-stat-label {
+  width: 26px;
 }
 
 /* The free, deterministic card. Sits above the scout panel and is deliberately
@@ -1187,4 +1281,15 @@ hr {
   text-align: left;
   margin-top: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* A reveal and a pulse are both motion; neither is load-bearing. */
+@media (prefers-reduced-motion: reduce) {
+  .row-detail {
+    animation: none;
+  }
+
+  .sk {
+    animation: none;
+  }
 }
