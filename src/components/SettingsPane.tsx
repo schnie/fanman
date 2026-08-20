@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Scoring, Settings } from '../domain/types'
+import { DEFAULT_SETTINGS, type Scoring, type Settings } from '../domain/types'
 import type { DataAdapter } from '../data/adapter'
 import { describeAge } from '../lib/format'
 
@@ -46,7 +46,7 @@ export function SettingsPane({
           inputMode="numeric"
           value={settings.budget}
           min={1}
-          onChange={(e) => onChange({ budget: clamp(e.target.value, 1, 10_000, 200) })}
+          onChange={(e) => onChange({ budget: clamp(e.target.value, 1, 10_000, DEFAULT_SETTINGS.budget) })}
         />
       </label>
 
@@ -57,7 +57,7 @@ export function SettingsPane({
           inputMode="numeric"
           value={settings.slots}
           min={1}
-          onChange={(e) => onChange({ slots: clamp(e.target.value, 1, 40, 16) })}
+          onChange={(e) => onChange({ slots: clamp(e.target.value, 1, 40, DEFAULT_SETTINGS.slots) })}
         />
       </label>
 
@@ -68,7 +68,7 @@ export function SettingsPane({
           inputMode="numeric"
           value={settings.teamCount}
           min={2}
-          onChange={(e) => onChange({ teamCount: clamp(e.target.value, 2, 32, 12) })}
+          onChange={(e) => onChange({ teamCount: clamp(e.target.value, 2, 32, DEFAULT_SETTINGS.teamCount) })}
         />
       </label>
 
@@ -116,7 +116,7 @@ export function SettingsPane({
           value={settings.prewarmDepth}
           min={0}
           max={40}
-          onChange={(e) => onChange({ prewarmDepth: clamp(e.target.value, 0, 40, 10) })}
+          onChange={(e) => onChange({ prewarmDepth: clamp(e.target.value, 0, 40, DEFAULT_SETTINGS.prewarmDepth) })}
         />
       </label>
       <div className="field-note">
@@ -147,6 +147,12 @@ export function SettingsPane({
   )
 }
 
+/**
+ * `fallback` is what an emptied field falls back to, and it comes from
+ * `DEFAULT_SETTINGS` rather than a literal at the call site — those were a
+ * second copy of the defaults, and they had already drifted: roster slots
+ * defaulted to 17 but reverted to 16 when you cleared the box.
+ */
 function clamp(raw: string, min: number, max: number, fallback: number): number {
   const n = parseInt(raw, 10)
   if (Number.isNaN(n)) return fallback
