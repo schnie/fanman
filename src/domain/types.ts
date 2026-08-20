@@ -128,11 +128,14 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   budget: 200,
-  // 17 = ESPN's standard 16 plus this league's extra head-coach slot.
-  slots: 17,
+  // The ten starting slots in `STARTER_SLOTS` — including this league's extra
+  // head-coach slot — plus five on the bench.
+  slots: 15,
   scoring: 'PPR',
   teamCount: 12,
-  prewarmDepth: 10,
+  // Five is roughly what turns over between nominations, so a verdict is
+  // usually waiting without paying for a queue the draft never reaches.
+  prewarmDepth: 5,
 }
 
 /**

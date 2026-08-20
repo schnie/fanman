@@ -95,7 +95,7 @@ describe('draft board end to end', () => {
   it('shows the opening max bid once rankings load', async () => {
     render(<App adapter={new FakeAdapter()} />)
     await screen.findByText('Jahmyr Gibbs')
-    expect(maxBid()).toBe('$184') // 200 - 16
+    expect(maxBid()).toBe('$186') // 200 - 14
   })
 
   it('crossing a player off does not touch the budget', async () => {
@@ -103,7 +103,7 @@ describe('draft board end to end', () => {
     render(<App adapter={new FakeAdapter()} />)
     await crossOff(user, 'Jahmyr Gibbs', 85)
 
-    expect(maxBid()).toBe('$184')
+    expect(maxBid()).toBe('$186')
     expect(within(bar()).getByText('$200')).toBeInTheDocument() // still full budget
   })
 
@@ -139,13 +139,13 @@ describe('draft board end to end', () => {
     await user.click(screen.getByRole('button', { name: '7' }))
 
     // The confirm step must state the consequences before it is irreversible.
-    expect(screen.getByText(/Leaves/)).toHaveTextContent('Leaves $143 for 16 slots · new max $128')
+    expect(screen.getByText(/Leaves/)).toHaveTextContent('Leaves $143 for 14 slots · new max $130')
 
     await user.click(screen.getByRole('button', { name: 'Confirm $57' }))
 
-    expect(maxBid()).toBe('$128') // 143 - 15
+    expect(maxBid()).toBe('$130') // 143 - 13
     expect(within(bar()).getByText('$143')).toBeInTheDocument()
-    expect(within(bar()).getByText('16')).toBeInTheDocument()
+    expect(within(bar()).getByText('14')).toBeInTheDocument()
   })
 
   it('refuses a bid above the max bid', async () => {
@@ -154,12 +154,13 @@ describe('draft board end to end', () => {
     await openRow(user, 'Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'We got them' }))
 
-    for (const d of ['1', '8', '6']) {
+    // One over the opening max of $186 — see the note on DEFAULT_SETTINGS.
+    for (const d of ['1', '8', '7']) {
       await user.click(screen.getByRole('button', { name: d }))
     }
 
     expect(screen.getByText('Over your max bid')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Confirm $186' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirm $187' })).toBeDisabled()
   })
 
   it('undo reverses a win and restores the budget exactly', async () => {
@@ -169,10 +170,10 @@ describe('draft board end to end', () => {
     await user.click(screen.getByRole('button', { name: 'We got them' }))
     await user.click(screen.getByRole('button', { name: '9' }))
     await user.click(screen.getByRole('button', { name: 'Confirm $9' }))
-    expect(maxBid()).toBe('$176')
+    expect(maxBid()).toBe('$178') // 191 - 13
 
     await user.click(screen.getByRole('button', { name: 'Undo last action' }))
-    expect(maxBid()).toBe('$184')
+    expect(maxBid()).toBe('$186')
   })
 
   it('resumes a draft that was already in progress', async () => {
@@ -210,7 +211,7 @@ describe('draft board end to end', () => {
     // Cached players still render, and the failure is surfaced rather than silent.
     expect(await screen.findByText('Jahmyr Gibbs')).toBeInTheDocument()
     expect(await screen.findByText(/offline/)).toBeInTheDocument()
-    expect(maxBid()).toBe('$184')
+    expect(maxBid()).toBe('$186')
   })
 
   it('pins the budget bar and the board controls as one sticky unit', async () => {
@@ -451,7 +452,7 @@ describe('draft board end to end', () => {
     await crossOff(user, 'Jahmyr Gibbs', 85)
 
     // Their money, not ours: our budget and max bid are untouched.
-    expect(maxBid()).toBe('$184')
+    expect(maxBid()).toBe('$186')
     expect(within(bar()).getByText('$200')).toBeInTheDocument()
     expect(adapter.draft?.log.at(-1)).toMatchObject({ playerId: 1, status: 'gone', price: 85 })
   })
