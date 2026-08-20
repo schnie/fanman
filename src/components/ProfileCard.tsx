@@ -28,7 +28,27 @@ export function ProfileCard({ player, profile, loading, error, offline, onRetry 
     return name ? <div className="profile-empty">{name}</div> : null
   }
 
-  if (loading) return <div className="profile-empty">Loading profile…</div>
+  // Shaped like the card it is standing in for, using the same classes, so it
+  // occupies the same space without a second set of measurements to keep in
+  // step. `role="status"` keeps the announcement the visible text used to make.
+  if (loading) {
+    return (
+      <div className="profile-card profile-skeleton" role="status">
+        <span className="sr-only">Loading profile…</span>
+        <div className="profile-line strong"><span className="sk sk-wide" /></div>
+        <div className="profile-line"><span className="sk sk-mid" /></div>
+        <div className="profile-line"><span className="sk sk-narrow" /></div>
+        <div className="profile-stats" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="profile-stat">
+              <span className="profile-stat-value"><span className="sk sk-stat" /></span>
+              <span className="profile-stat-label"><span className="sk sk-stat-label" /></span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     return (

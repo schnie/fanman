@@ -608,6 +608,52 @@ describe('player profiles', () => {
     expect(adapter.fetched).toEqual([1])
   })
 
+  it('holds the profile\'s space open while it is still in flight', async () => {
+    // The jank this replaced: the panel opened one line tall, then the profile
+    // landed a second or two later on a cell connection and grew by most of a
+    // screen — shoving the action buttons out from under a thumb already
+    // moving toward them. The buttons must be there, and settled, from the tap.
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    let release: (p: PlayerProfile) => void = () => {}
+    adapter.fetchProfile = (playerId: number) =>
+      new Promise<PlayerProfile>((resolve) => {
+        release = () => resolve(makeProfile(playerId))
+      })
+
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await openRow(user, 'Jahmyr Gibbs')
+
+    // Standing in for the card, in the card's own box rather than one line.
+    const slot = document.querySelector('.profile-slot')!
+    expect(slot.querySelector('.profile-skeleton')).not.toBeNull()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading profile…')
+
+    // The actions are already rendered, and are what they will stay.
+    expect(screen.getByRole('button', { name: 'Gone' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'We got them' })).toBeInTheDocument()
+
+    release(makeProfile(1))
+    expect(await screen.findByText(/Detroit Lions/)).toBeInTheDocument()
+
+    // Same box, now holding the real card — and the buttons never went away.
+    expect(slot.querySelector('.profile-card')).not.toBeNull()
+    expect(slot.querySelector('.profile-skeleton')).toBeNull()
+    expect(screen.getByRole('button', { name: 'We got them' })).toBeInTheDocument()
+  })
+
+  it('reserves nothing for players with no profile to fetch', async () => {
+    // D/ST and coaches have no athlete record, so there is no wait to cover —
+    // reserving the box anyway would leave a hole under the team name.
+    const user = userEvent.setup()
+    render(<App adapter={new ProfileAdapter()} />)
+    await screen.findByText('Texans D/ST')
+    await openRow(user, 'Texans D/ST')
+
+    expect(document.querySelector('.profile-slot-bare')).not.toBeNull()
+  })
+
   it('offers a retry after a failure, and does not spin in the meantime', async () => {
     const user = userEvent.setup()
     const adapter = new ProfileAdapter()
