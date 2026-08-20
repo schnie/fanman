@@ -125,11 +125,12 @@ copy of the whole suite and reports passes from code you aren't changing.
 - `App.dom.test.tsx` drives the real UI end-to-end through a fake `DataAdapter`.
   That's the intended way to test a flow — prefer it to mounting a component in
   isolation with mocked props.
-- Live tests self-skip, so `npm test` stays offline and CI never touches ESPN.
-  The ESPN ones gate on `FANMAN_LIVE`; **`scout.live.test.ts` gates on
-  `ANTHROPIC_API_KEY` being present in the environment** — so a plain `npm test`
-  in a shell that exports a key will make a real billed call. Worth knowing
-  before you export one globally.
+- Every live test gates on `FANMAN_LIVE`, which only the `test:live` /
+  `test:profile` / `test:scout` scripts set. So `npm test` stays offline, CI
+  never touches ESPN, and an exported `ANTHROPIC_API_KEY` on its own can never
+  buy a scout report — spending money takes the deliberate act. The scout check
+  needs the key *in addition*, and fails loudly rather than skipping green when
+  you ask for it without one. Don't weaken either half of that gate.
 
 ## Types & tooling
 

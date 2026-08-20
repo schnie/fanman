@@ -13,8 +13,28 @@ import type { Player } from '../domain/types'
  * If the schema is being ignored, the tolerant parser still produces a report —
  * this test would pass but `notes`/`sources` would likely come back empty.
  */
+
+/**
+ * Two switches, both required — and the key is deliberately not one of the two
+ * on its own.
+ *
+ * Presence of `ANTHROPIC_API_KEY` used to be the entire gate, which made a
+ * billed call an accident away: exporting the key in your shell is an ordinary
+ * thing to do, and any plain `npm test` from that shell then bought a scout
+ * report. `FANMAN_LIVE` is set by the `test:scout` script and nothing else, so
+ * spending money now requires the deliberate act, matching how the (free) ESPN
+ * live tests gate.
+ */
+const optedIn = Boolean(process.env.FANMAN_LIVE)
 const key = process.env.ANTHROPIC_API_KEY
-const live = key ? describe : describe.skip
+const live = optedIn && key ? describe : describe.skip
+
+/**
+ * Asking for the live check without a key would otherwise skip in silence and
+ * report green — indistinguishable from the call having succeeded, which is the
+ * one outcome this test exists to establish.
+ */
+const missingKey = optedIn && !key ? describe : describe.skip
 
 const target: Player = {
   id: 4429795,
@@ -51,5 +71,14 @@ live('scout against the real API', () => {
     // Latency is the whole reason the queue pre-warms rather than fetching on
     // demand. If this ever drops under a couple of seconds, revisit that.
     console.log(`  sources returned: ${report.sources.length}`)
+  })
+})
+
+missingKey('scout live test', () => {
+  it('refuses to report success without a key', () => {
+    expect(
+      key,
+      'The live scout check needs a key: ANTHROPIC_API_KEY=sk-ant-… npm run test:scout',
+    ).toBeTruthy()
   })
 })
