@@ -46,10 +46,37 @@ export default defineConfig(({ command }) => ({
         // A hard refresh mid-draft must not land on a blank page.
         navigateFallback: `${BASE}index.html`,
         cleanupOutdatedCaches: true,
-        // Deliberately NO runtime caching for ESPN, FPI or Anthropic:
+        // Deliberately NO runtime caching of ESPN, FPI or Anthropic *data*:
         // rankings are already cached in localStorage with a visible
         // timestamp, and a silently stale scout report would be worse than
         // none. See README.
+        //
+        // Images are the exception, and the reasoning inverts. A face does not
+        // go stale — nobody is misled by last week's headshot — while the cost
+        // of refetching is real: ESPN stamps headshots `max-age=152`, so
+        // without this the board redownloads them every few minutes on venue
+        // wifi. CacheFirst means we never even ask again.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }: { url: URL }) => url.hostname === 'a.espncdn.com',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'espn-images',
+              expiration: {
+                // A full board is ~230 faces; the headroom covers crests and a
+                // scoring switch. At ~15KB each this stays a few MB.
+                maxEntries: 400,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
+              },
+              // 200 only, never 0: the avatars are requested with
+              // `crossOrigin`, so a healthy response is never opaque, and an
+              // opaque one here means something went wrong and is not worth
+              // pinning for a month.
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
       },
       devOptions: {
         // Keep the service worker out of the way while developing.

@@ -140,6 +140,19 @@ API. Rankings already live in localStorage with a visible timestamp, and a
 silently stale scout report would be worse than none — so those go to the
 network or fail visibly rather than being served from a cache you can't see.
 
+Player images are the one exception, because the argument reverses for them. A
+headshot doesn't go stale in any way that can mislead you, and ESPN serves the
+full-size original with `cache-control: max-age=152` — two and a half minutes,
+so scrolling back up the board refetches 230KB per face. They now go through
+ESPN's combiner (`?img=…&h=102`, ~15KB, `max-age=86400`) and sit in a
+`CacheFirst` route, so a second look costs nothing and the faces survive a dead
+venue wifi along with everything else.
+
+One trap worth recording: the combiner does **not** crop to a box. Given both
+`w` and `h` it scales each axis independently, so a 600×436 headshot asked for
+a square comes back with the face 1.35× too narrow. Constrain height only and
+let `object-fit: cover` on the avatar do the cropping.
+
 Updates use `autoUpdate`. Draft state is in localStorage and survives a reload,
 so taking the newest code automatically is safe, and far better than being
 stuck on a stale build on draft morning with no way to tell.

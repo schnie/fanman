@@ -104,7 +104,10 @@
 }
 
 .budget-max-value {
-  font-size: 40px;
+  /* Fluid, because this is the widest thing in the header and it grows by a
+     whole digit at $100 — the point where the row used to wrap on a phone.
+     Still far and away the largest text on screen at the low end. */
+  font-size: clamp(29px, 8vw, 40px);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--green);
@@ -155,6 +158,37 @@
   flex-basis: 100%;
   font-size: 13px;
   color: var(--amber);
+}
+
+/* ---- phone widths: keep the header on one line ----
+
+   The bar is `flex-wrap: wrap`, and flex decides where to wrap using each
+   item's *hypothetical* width — before any shrinking — so `flex-shrink` can't
+   save this row. The only fix is for the contents to genuinely measure less
+   than the viewport. At 375px (the narrowest phone worth supporting) the
+   3-digit layout overran by ~67px; the trims below reclaim ~77px, so it holds
+   with a little room to spare. Horizontal padding is deliberately untouched —
+   it aligns the header with the rows underneath. */
+@media (max-width: 460px) {
+  .budget-bar {
+    gap: 10px;
+  }
+
+  .budget-side {
+    gap: 9px;
+  }
+
+  .stat-label {
+    letter-spacing: 0.02em;
+  }
+
+  .stat-value {
+    font-size: 16px;
+  }
+
+  .undo {
+    padding: 0 9px;
+  }
 }
 
 /* ---------- controls ---------- */
