@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { BID_PROMPT } from './components/BidSheet'
 import type { CachedRankings, DataAdapter } from './data/adapter'
 import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
@@ -455,6 +456,22 @@ describe('draft board end to end', () => {
     expect(maxBid()).toBe('$186')
     expect(within(bar()).getByText('$200')).toBeInTheDocument()
     expect(adapter.draft?.log.at(-1)).toMatchObject({ playerId: 1, status: 'gone', price: 85 })
+  })
+
+  it('asks for the bid the same way whichever button opened the sheet', async () => {
+    // The two modes drifted apart once already — 'Gone' asked "What did they
+    // sell for?" while 'We got them' said "Enter the winning bid". Same number,
+    // same keypad, so it reads as the same question either way.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+
+    await openRow(user, 'Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'Gone' }))
+    expect(screen.getByText(BID_PROMPT)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    await user.click(screen.getByRole('button', { name: 'We got them' }))
+    expect(screen.getByText(BID_PROMPT)).toBeInTheDocument()
   })
 
   it('lets a sold price exceed our own max bid', async () => {

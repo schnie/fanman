@@ -3,6 +3,13 @@ import { canBid, previewBid } from '../domain/budget'
 import type { DraftState, Player } from '../domain/types'
 
 /**
+ * The empty-keypad prompt, shared by both modes. Whose money it is changes what
+ * happens next, but the number being asked for is the same one either way, and
+ * the sheet already names the player and says where the money lands.
+ */
+export const BID_PROMPT = 'Enter the winning bid'
+
+/**
  * Winning bid entry. Deliberately shows the resulting budget *before* commit —
  * a fat-fingered $80 should be visible as a mistake, not discovered three picks
  * later.
@@ -51,11 +58,11 @@ export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, on
 
         <div className={`sheet-preview ${valid ? '' : 'invalid'}`}>
           {sold ? (
-            skipping ? 'What did they sell for?' : 'Recorded against the room, not your budget'
+            skipping ? BID_PROMPT : 'Recorded against the room, not your budget'
           ) : after ? (
             <>Leaves <strong>${after.remaining}</strong> for <strong>{after.slotsLeft}</strong> slots · new max <strong>${after.maxBid}</strong></>
           ) : raw === '' ? (
-            'Enter the winning bid'
+            BID_PROMPT
           ) : (
             'Over your max bid'
           )}
