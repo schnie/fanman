@@ -57,6 +57,28 @@ export function teamName(proTeamId: number): string | null {
   return TEAMS[proTeamId]?.name ?? null
 }
 
+/** Avatars paint at 34 CSS px; 3x covers the densest phone screens. */
+const AVATAR_PX = 102
+
+/**
+ * ESPN's image combiner, which resizes on their CDN before sending anything.
+ *
+ * Worth routing through twice over. The full-size headshot is a 600x436,
+ * 230KB PNG being squeezed into a 34px circle, and ESPN serves it with
+ * `cache-control: max-age=152` — stale in two and a half minutes, so scrolling
+ * back up the board refetches it. The combiner returns ~15KB with
+ * `max-age=86400`, and the service worker keeps it from there.
+ *
+ * Only ever constrains ONE axis. Passing both `w` and `h` does not crop to
+ * fit — it scales each axis independently, so handing a 600x436 headshot a
+ * square box returns a face squeezed 1.35x narrower. Constraining height alone
+ * preserves the source ratio and leaves the cropping to `object-fit: cover` on
+ * the avatar, exactly as it worked with the full-size original.
+ */
+function combinerUrl(path: string, height: number): string {
+  return `https://a.espncdn.com/combiner/i?img=${path}&h=${height}`
+}
+
 /**
  * Both of these are pure string building — no request, no key, no failure
  * mode. Every player on the board already carries the id each one needs, so
@@ -64,7 +86,7 @@ export function teamName(proTeamId: number): string | null {
  */
 export function teamLogoUrl(proTeamId: number): string | null {
   const abbr = teamAbbr(proTeamId)
-  return abbr ? `https://a.espncdn.com/i/teamlogos/nfl/500/${abbr.toLowerCase()}.png` : null
+  return abbr ? combinerUrl(`/i/teamlogos/nfl/500/${abbr.toLowerCase()}.png`, AVATAR_PX) : null
 }
 
 /**
@@ -76,7 +98,9 @@ export function teamLogoUrl(proTeamId: number): string | null {
  * the team logo instead, which is the right picture for them anyway.
  */
 export function headshotUrl(playerId: number): string | null {
-  return playerId > 0 ? `https://a.espncdn.com/i/headshots/nfl/players/full/${playerId}.png` : null
+  return playerId > 0
+    ? combinerUrl(`/i/headshots/nfl/players/full/${playerId}.png`, AVATAR_PX)
+    : null
 }
 
 /** True when ESPN has no athlete record behind this id — D/ST and coaches. */

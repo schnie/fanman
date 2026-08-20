@@ -44,12 +44,26 @@ describe('pro team map', () => {
 describe('asset urls', () => {
   it('builds a headshot from the player id alone', () => {
     expect(headshotUrl(4429795)).toBe(
-      'https://a.espncdn.com/i/headshots/nfl/players/full/4429795.png',
+      'https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/4429795.png&h=102',
     )
   })
 
   it('lowercases the abbreviation for the logo path', () => {
-    expect(teamLogoUrl(28)).toBe('https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png')
+    expect(teamLogoUrl(28)).toBe(
+      'https://a.espncdn.com/combiner/i?img=/i/teamlogos/nfl/500/wsh.png&h=102',
+    )
+  })
+
+  it('constrains one axis only, so nothing comes back stretched', () => {
+    // ESPN's combiner does not crop to a box: given both `w` and `h` it scales
+    // the axes independently, and a 600x436 headshot asked for a square comes
+    // back with the face 1.35x too narrow. Height alone keeps the ratio and
+    // lets `object-fit: cover` on the avatar do the cropping.
+    for (const url of [headshotUrl(4429795)!, teamLogoUrl(28)!]) {
+      const params = new URLSearchParams(new URL(url).search)
+      expect(params.get('h')).toBe('102')
+      expect(params.has('w')).toBe(false)
+    }
   })
 
   it('has no headshot for D/ST or head coaches', () => {

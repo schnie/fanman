@@ -6,10 +6,12 @@ import type { Player } from '../domain/types'
  * The player's face, falling back to their team's crest, falling back to their
  * initials.
  *
- * Costs no request of our own: both URLs are built from ids the board already
- * carries, so there is nothing to fetch, cache or fail. The images themselves
- * are lazy — ~230 rows would otherwise fire ~230 requests on first paint to
- * decorate the handful actually on screen.
+ * Costs no API call of our own: both URLs are built from ids the board already
+ * carries, so nothing has to be looked up first. The images are lazy — ~230
+ * rows would otherwise fire ~230 requests on first paint to decorate the
+ * handful actually on screen — resized by ESPN's combiner, and held by the
+ * service worker so a second look costs nothing (see `proTeams.ts` and the
+ * workbox config).
  *
  * D/ST and head coaches skip straight to the crest, which is their real
  * portrait anyway; ESPN has no headshot behind their synthetic ids.
@@ -41,6 +43,11 @@ export function PlayerAvatar({ player }: { player: Player }) {
         height={34}
         loading="lazy"
         decoding="async"
+        // ESPN answers with `access-control-allow-origin: *`, so asking for
+        // CORS costs nothing and keeps these out of the service worker as
+        // opaque responses — which browsers pad to megabytes apiece against
+        // the storage quota, on a cache meant to hold a few hundred faces.
+        crossOrigin="anonymous"
         onError={() => setFailed((f) => f + 1)}
       />
     </span>
