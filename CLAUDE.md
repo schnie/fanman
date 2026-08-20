@@ -176,6 +176,4 @@ anything non-obvious; the *why* is there and usually nowhere else. Match it:
 
 ## Known loose ends
 
-- `README.md` links to `PLAN.md`, which doesn't exist in the repo and never has.
-  Either write it or drop the two references (top of README, and "Status").
 - Next step per README: rehearse a full mock draft on the phone.

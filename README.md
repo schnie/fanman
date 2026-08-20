@@ -4,8 +4,6 @@ Phone-first companion for a live, in-person ESPN auction draft. Tracks who's
 gone, what you've won, and — the number that actually matters while someone is
 counting down a bid — your current **max bid**.
 
-See [PLAN.md](./PLAN.md) for scope, architecture rationale, and the schedule.
-
 ## Running it
 
 ```bash
@@ -224,4 +222,4 @@ budget math, undo, positional roster with bench divider, head coaches with
 FPI-derived values, settings, persistence, offline fallback, the scout,
 player profiles, and a GitHub Pages deploy.
 
-Next: rehearse a full mock draft on the phone. See PLAN.md §7.
+Next: rehearse a full mock draft on the phone.
