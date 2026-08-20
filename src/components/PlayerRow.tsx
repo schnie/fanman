@@ -82,7 +82,12 @@ export const PlayerRow = memo(function PlayerRow({
   const team = isTeamEntity(player.id) ? null : teamAbbr(player.proTeamId)
 
   return (
-    <li className={`row ${pick?.status ?? ''} ${expanded ? 'expanded' : ''}`}>
+    // `data-row-anchor` is how useScrollAnchor finds this row again after the
+    // accordion has moved — see the hook.
+    <li
+      data-row-anchor={player.id}
+      className={`row ${pick?.status ?? ''} ${expanded ? 'expanded' : ''}`}
+    >
       <button className="row-main" onClick={() => onToggle(player.id)}>
         {/* Rank and position stack in a fixed-width gutter. Position is a
             property of the player, so it belongs with the other identifiers —
