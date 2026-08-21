@@ -1444,6 +1444,18 @@ hr {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/*
+ * The API key field is a text input, not a password input, so that password
+ * managers don't claim it (see MASK_TEXT in SettingsPane.tsx). This is what
+ * masks it instead. The component only applies `.key-input-masked` when the
+ * browser reports support, and falls back to `type="password"` when it
+ * doesn't — so this rule is never the only thing standing between a key and
+ * the screen.
+ */
+.key-input-masked {
+  -webkit-text-security: disc;
+}
+
 /* A reveal and a pulse are both motion; neither is load-bearing. */
 @media (prefers-reduced-motion: reduce) {
   .row-detail {
