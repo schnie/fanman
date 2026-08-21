@@ -583,14 +583,19 @@
 }
 
 /* Fixed-width slot chips so the position column reads as a straight edge down
-   the roster rather than ragged text. */
+   the roster rather than ragged text. Wide enough for the longest label the
+   column can hold — a filled OP reads `OP/WR` — because a chip that outgrew a
+   hard `width` would spill its letters outside its own background, and one
+   allowed to grow past its neighbours would put a kink in the very edge this
+   column exists to keep straight. `min-width`, so the former can't happen
+   either if a font renders wider than measured. */
 .slot {
   flex: 0 0 auto;
-  width: 42px;
+  min-width: 48px;
   text-align: center;
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 0;
+  padding: 4px 3px;
   border-radius: 4px;
   background: var(--surface-2);
   color: var(--muted);
