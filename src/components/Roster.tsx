@@ -191,14 +191,23 @@ function RosterRow({ row, bench, shortAt }: {
   // the crest, so "Texans D/ST · HOU" would say it twice. Asked by id, never
   // off the position label, so the two notions can't drift apart.
   const team = player && !isTeamEntity(player.id) ? teamAbbr(player.proTeamId) : null
-  // The slot chip says where they're *starting*, which for OP is not what they
-  // play. Shown only when the two disagree — anywhere else it would be the
-  // same three letters twice.
-  const offSlot = player && player.position !== row.label ? player.position : null
+  // OP is the only slot whose label and the position filling it can disagree.
+  // That used to surface as a second chip to the right of the name, which read
+  // as an unrelated badge floating in the middle of the row. Fold it into the
+  // slot chip instead — `OP/WR` — so every position cue on the roster lives in
+  // the one left-hand column, and tint the chip by what is actually in the
+  // slot rather than by the slot's own name. Empty, it still says `OP`.
+  const fillPos = player && player.position !== row.label ? player.position : null
+  const slotLabel = fillPos ? `${row.label}/${fillPos}` : row.label
 
   return (
     <li className={`roster-row ${empty ? 'open' : ''} ${bench ? 'is-bench' : ''}`}>
-      <span className={`slot slot-${posClass(row.label)}`}>{row.label}</span>
+      <span
+        className={`slot slot-${posClass(fillPos ?? row.label)}`}
+        title={fillPos ? `${row.label} slot, starting a ${fillPos}` : undefined}
+      >
+        {slotLabel}
+      </span>
 
       {/* The face is what makes the board scannable, and the roster is the
           same list of people. An empty slot keeps the circle so the names stay
@@ -220,7 +229,6 @@ function RosterRow({ row, bench, shortAt }: {
         <span className="roster-player">
           {player?.name ?? (empty ? 'Empty' : `Player ${row.pick?.playerId}`)}
         </span>
-        {offSlot && <span className={`pos pos-${posClass(offSlot)}`}>{offSlot}</span>}
         {team && <span className="row-team">{team}</span>}
         <ByeChip
           week={player?.byeWeek}

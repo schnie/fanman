@@ -357,16 +357,6 @@
   text-align: left;
 }
 
-/* Pressed means the board underneath is already filtered to this player, so
-   the same button now reads "put the board back". A rule down the inside edge
-   rather than a fill: the banner's tint is what tells drain from buy across a
-   noisy room, and a second background would fight it. */
-.nextmove-pick[aria-pressed='true'] {
-  margin-left: -10px;
-  padding-left: 8px;
-  border-left: 2px solid currentColor;
-}
-
 .nextmove-name {
   font-size: 16px;
   font-weight: 600;
@@ -618,14 +608,19 @@
 }
 
 /* Fixed-width slot chips so the position column reads as a straight edge down
-   the roster rather than ragged text. */
+   the roster rather than ragged text. Wide enough for the longest label the
+   column can hold — a filled OP reads `OP/WR` — because a chip that outgrew a
+   hard `width` would spill its letters outside its own background, and one
+   allowed to grow past its neighbours would put a kink in the very edge this
+   column exists to keep straight. `min-width`, so the former can't happen
+   either if a font renders wider than measured. */
 .slot {
   flex: 0 0 auto;
-  width: 42px;
+  min-width: 48px;
   text-align: center;
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 0;
+  padding: 4px 3px;
   border-radius: 4px;
   background: var(--surface-2);
   color: var(--muted);
@@ -1137,6 +1132,11 @@
   line-height: 1.5;
 }
 
+.field-note a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .wide {
   width: 100%;
   min-height: 50px;
@@ -1587,6 +1587,18 @@ hr {
   text-align: left;
   margin-top: 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/*
+ * The API key field is a text input, not a password input, so that password
+ * managers don't claim it (see MASK_TEXT in SettingsPane.tsx). This is what
+ * masks it instead. The component only applies `.key-input-masked` when the
+ * browser reports support, and falls back to `type="password"` when it
+ * doesn't — so this rule is never the only thing standing between a key and
+ * the screen.
+ */
+.key-input-masked {
+  -webkit-text-security: disc;
 }
 
 /* A reveal and a pulse are both motion; neither is load-bearing. */
