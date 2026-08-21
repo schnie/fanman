@@ -534,6 +534,30 @@ describe('draft board end to end', () => {
     }
   })
 
+  it('keeps the same avatar elements across a trip to another tab', async () => {
+    // Board -> My team -> Board used to destroy every row and rebuild it, so
+    // ~230 already-decoded <img> elements were thrown away and the faces
+    // trickled back in a beat late. Node identity is the whole assertion: the
+    // same element means the browser still holds its decoded pixels, and there
+    // is nothing to fetch, decode or lazily defer on the way back.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await screen.findByText('Jahmyr Gibbs')
+
+    const avatarFor = (name: string) =>
+      screen.getByText(name).closest('.row')!.querySelector('img')
+
+    const before = avatarFor('Jahmyr Gibbs')
+    expect(before).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    // Hidden, so it is out of the accessibility tree while the roster is up.
+    expect(screen.queryByRole('button', { name: /Jahmyr Gibbs/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    expect(avatarFor('Jahmyr Gibbs')).toBe(before)
+  })
+
   it('marks every row so the scroll anchor can find it again', async () => {
     // useScrollAnchor locates the tapped row by this attribute after the
     // accordion has moved. Drop it and the hook degrades silently: no error,
