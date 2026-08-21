@@ -21,13 +21,19 @@ export function ScoutChip({ report, loading }: { report?: ScoutReport; loading: 
   )
 }
 
-/** The detail, shown only once a row is expanded. */
-export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }: {
+/**
+ * The detail, shown only once a row is expanded.
+ *
+ * `hasKey` means "scouting is possible right now" — App folds being online
+ * into it — so every affordance here hangs off that one flag. Saying we are
+ * offline is `PlayerRow`'s job; this panel is never mounted offline without a
+ * report already in hand.
+ */
+export function ScoutPanel({ report, loading, error, hasKey, onScout }: {
   report?: ScoutReport
   loading: boolean
   error?: string
   hasKey: boolean
-  offline?: boolean
   onScout: () => void
 }) {
   if (loading) {
@@ -54,11 +60,7 @@ export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }:
         {hasKey ? (
           <button className="scout-link" onClick={onScout}>Scout this player</button>
         ) : (
-          <span>
-            {offline
-              ? 'Offline — scouting needs a connection.'
-              : 'Add an API key in Settings to scout players.'}
-          </span>
+          <span>Add an API key in Settings to scout players.</span>
         )}
       </div>
     )
@@ -93,7 +95,10 @@ export function ScoutPanel({ report, loading, error, hasKey, offline, onScout }:
         {/* Reports survive a refresh, so the age has to be visible — a restored
             report must not read as though it were just fetched. */}
         <span className="scout-age">Scouted {describeAge(report.fetchedAt)}</span>
-        <button className="scout-run" onClick={onScout}>Scout again</button>
+        {/* A re-check that cannot run — no key, or offline — is a button that
+            silently does nothing when tapped. The age stays either way, so a
+            restored report never reads as fresh. */}
+        {hasKey && <button className="scout-run" onClick={onScout}>Scout again</button>}
       </div>
     </div>
   )

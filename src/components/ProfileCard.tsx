@@ -1,9 +1,6 @@
 import { isTeamEntity, teamName } from '../data/proTeams'
 import type { Player, PlayerProfile } from '../domain/types'
 
-/** Said the same way whether the fetch failed or was never attempted. */
-const OFFLINE = 'Offline — profile unavailable.'
-
 /**
  * The deterministic half of the expanded row: who this player is, what they
  * did last season, and Rotowire's latest note.
@@ -12,13 +9,16 @@ const OFFLINE = 'Offline — profile unavailable.'
  * it should be what you see first — the scout becomes the deliberate
  * escalation for "is there news in the last two weeks", rather than the only
  * way to learn anything at all about a player.
+ *
+ * Knows nothing about being offline: `PlayerRow` decides that, and only mounts
+ * this when there is something to render. Two components each announcing the
+ * same lost connection is what this used to be.
  */
-export function ProfileCard({ player, profile, loading, error, offline, onRetry }: {
+export function ProfileCard({ player, profile, loading, error, onRetry }: {
   player: Player
   profile?: PlayerProfile
   loading: boolean
   error?: string
-  offline?: boolean
   onRetry: () => void
 }) {
   // Team entities have no athlete record to fetch. Saying so plainly beats an
@@ -53,16 +53,13 @@ export function ProfileCard({ player, profile, loading, error, offline, onRetry 
   if (error) {
     return (
       <div className="profile-empty error">
-        <span>{offline ? OFFLINE : error}</span>
-        {!offline && <button className="scout-link" onClick={onRetry}>Retry</button>}
+        <span>{error}</span>
+        <button className="scout-link" onClick={onRetry}>Retry</button>
       </div>
     )
   }
 
-  // Offline with nothing cached never produces an error, because the fetch is
-  // never attempted. Without this the card would silently render nothing and
-  // read as "this player has no profile" rather than "come back online".
-  if (!profile) return offline ? <div className="profile-empty">{OFFLINE}</div> : null
+  if (!profile) return null
 
   // Three grouped lines rather than a label/value table: on a phone mid-draft
   // this is scanned, not read, and the labels are all inferable from the
