@@ -99,6 +99,22 @@ const DRAIN_POOL = 12
 const TIER_DEPTH = 5
 
 /**
+ * How far below the best player left a "near-identical" one is allowed to sit.
+ *
+ * Depth alone was not enough. The tail rule picks the *most discounted* player
+ * in the window and only breaks ties on value, so a $3 discount beat any
+ * amount of value: given a window spanning $58 down to $42 it would hand back
+ * $16 of player to save $3 of overpay. That is only sound when the window is a
+ * genuine tier, and nothing made it one — the top five can straddle a cliff,
+ * and with several positions still open they aren't even the same position.
+ *
+ * Fifteen percent is about where "the same player with a cheaper name" stops
+ * being true. Outside it the window collapses toward the best player left,
+ * which is the right answer when there is no tier to find a tail in.
+ */
+const TIER_BAND = 0.85
+
+/**
  * Where to open a drain nomination, as a share of the expected sale price.
  *
  * Low enough that someone will always take it off our hands — the one way this
@@ -259,7 +275,13 @@ function buyPick(
 
   const wanted = affordable.filter((p) => needed.has(p.position))
   const pool = preferHealthy(wanted.length > 0 ? wanted : affordable)
-  const tier = [...pool].sort(byValueDesc).slice(0, TIER_DEPTH)
+
+  // Depth *and* band: the discount rule only gets to run among players close
+  // enough in value to be substitutes. The leader always survives the filter,
+  // so a board with no tier left still yields the best player we can afford.
+  const ranked = [...pool].sort(byValueDesc)
+  const floor = ranked[0].marketValue * TIER_BAND
+  const tier = ranked.slice(0, TIER_DEPTH).filter((p) => p.marketValue >= floor)
 
   const player = [...tier].sort(
     (a, b) => marketPremium(a) - marketPremium(b) || b.marketValue - a.marketValue,

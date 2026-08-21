@@ -175,6 +175,25 @@ describe('buying', () => {
     expect(advice.pick?.premium).toBe(-6)
   })
 
+  it('ignores a discount that would cost real value', () => {
+    // A cliff, not a tier: four players in the $200s and then a drop to $100.
+    // The cheap one carries the biggest discount on the board — $30 under book
+    // — and taking it would still mean handing back $100 of player to save it.
+    const players = [
+      makePlayer({ id: 1, marketValue: 200, espnValue: 200 }),
+      makePlayer({ id: 2, marketValue: 199, espnValue: 199 }),
+      makePlayer({ id: 3, marketValue: 198, espnValue: 198 }),
+      makePlayer({ id: 4, marketValue: 197, espnValue: 197 }),
+      makePlayer({ id: 5, name: 'Big discount', marketValue: 100, espnValue: 130 }),
+      ...Array.from({ length: 200 }, (_, i) =>
+        makePlayer({ id: i + 10, marketValue: 99, espnValue: 99 }),
+      ),
+    ]
+    const advice = advise(players)
+    expect(advice.posture).toBe('buy')
+    expect(advice.pick?.player.id).toBe(1)
+  })
+
   it('fills a hole rather than chasing the best player left', () => {
     // The richest player on the board is a WR, and we can afford him — but
     // three won WRs have already filled WR1, WR2 and the OP slot, so he buys
