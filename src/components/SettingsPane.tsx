@@ -82,7 +82,7 @@ export function SettingsPane({
 
       <div className="field-note">
         Rankings {fetchedAt ? `updated ${describeAge(fetchedAt)}` : 'not yet loaded'}.
-        Pull again right before the draft — auction values move daily.
+        Pull again right before the draft, because auction values move daily.
       </div>
       <button className="wide" onClick={onRefresh}>Refresh rankings</button>
 
@@ -104,8 +104,11 @@ export function SettingsPane({
         {keySaved ? 'Saved' : 'Save key'}
       </button>
       <div className="field-note">
-        Stored on this device only — this app has no server. Use a dedicated key
-        with a spend cap and revoke it after the draft.
+        Stored on this device only, since this app has no server. Use a dedicated
+        key with a spend cap and revoke it after the draft. Keys live at{' '}
+        <a href="https://platform.anthropic.com/settings/keys" target="_blank" rel="noreferrer">
+          platform.anthropic.com
+        </a>.
       </div>
 
       <label className="field">
@@ -121,7 +124,7 @@ export function SettingsPane({
       </label>
       <div className="field-note">
         Scouts the top N available players in the background so a verdict is
-        already waiting when a name is called. Each scout is a paid API call —
+        already waiting when a name is called. Each scout is a paid API call, so
         set 0 to only scout players you tap. <strong>{scoutCalls}</strong> run
         this session.
       </div>
