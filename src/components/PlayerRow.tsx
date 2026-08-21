@@ -164,9 +164,7 @@ export const PlayerRow = memo(function PlayerRow({
           )}
 
           {offline && (!hasProfile || !scout) && (
-            <p className="row-offline">
-              Offline — player info and scouting need a connection. Marking picks still works.
-            </p>
+            <p className="row-offline">Offline — player info and scouting need a connection.</p>
           )}
 
           {showScout && (

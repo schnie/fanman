@@ -1143,8 +1143,8 @@ hr {
 }
 
 /* The one thing an open row says when there is no connection. Not a flex
-   one-liner like the empty states above: it is a sentence that wraps to two
-   lines on a phone, and it stands in for the profile slot rather than sitting
+   one-liner like the empty states above: it is a sentence that can wrap on a
+   narrow phone, and it stands in for the profile slot rather than sitting
    beside it, so it sets its own height from its text. */
 .row-offline {
   margin: 0;
