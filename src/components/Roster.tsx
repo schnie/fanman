@@ -3,6 +3,8 @@ import { wonPicksFrom, type BudgetSummary } from '../domain/budget'
 import { buildLineup, type LineupRow } from '../domain/lineup'
 import type { Pick, Player } from '../domain/types'
 import { posClass } from '../lib/format'
+import { isTeamEntity, teamAbbr } from '../data/proTeams'
+import { PlayerAvatar } from './PlayerAvatar'
 
 export function Roster({ picks, players, summary, slots }: {
   picks: Map<number, Pick>
@@ -50,12 +52,41 @@ export function Roster({ picks, players, summary, slots }: {
 
 function RosterRow({ row, bench }: { row: LineupRow; bench?: boolean }) {
   const empty = !row.pick
+  const player = row.player
+  // The board's guard, unchanged: D/ST and head coaches carry their team in
+  // the crest, so "Texans D/ST · HOU" would say it twice. Asked by id, never
+  // off the position label, so the two notions can't drift apart.
+  const team = player && !isTeamEntity(player.id) ? teamAbbr(player.proTeamId) : null
+  // The slot chip says where they're *starting*, which for OP is not what they
+  // play. Shown only when the two disagree — anywhere else it would be the
+  // same three letters twice.
+  const offSlot = player && player.position !== row.label ? player.position : null
+
   return (
     <li className={`roster-row ${empty ? 'open' : ''} ${bench ? 'is-bench' : ''}`}>
       <span className={`slot slot-${posClass(row.label)}`}>{row.label}</span>
+
+      {/* The face is what makes the board scannable, and the roster is the
+          same list of people. An empty slot keeps the circle so the names stay
+          on one straight left edge instead of sliding left wherever the lineup
+          still has a hole. */}
+      {player ? (
+        <PlayerAvatar player={player} />
+      ) : (
+        <span className="avatar roster-avatar-open" aria-hidden="true" />
+      )}
+
       <span className="roster-name">
-        {row.player?.name ?? (empty ? 'Empty' : `Player ${row.pick?.playerId}`)}
+        <span className="roster-player">
+          {player?.name ?? (empty ? 'Empty' : `Player ${row.pick?.playerId}`)}
+        </span>
+        {offSlot && <span className={`pos pos-${posClass(offSlot)}`}>{offSlot}</span>}
+        {team && <span className="row-team">{team}</span>}
+        {player?.injured && (
+          <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>
+        )}
       </span>
+
       <span className="roster-price">{row.pick ? `$${row.pick.price}` : '—'}</span>
     </li>
   )

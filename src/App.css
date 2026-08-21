@@ -720,8 +720,10 @@
 .roster-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 0;
+  gap: 9px;
+  /* Tighter than it looks: the avatar is 34px, so this lands the row on the
+     board's 52px, and the two lists scroll at the same rhythm. */
+  padding: 9px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -735,7 +737,7 @@
    the roster rather than ragged text. */
 .slot {
   flex: 0 0 auto;
-  width: 46px;
+  width: 42px;
   text-align: center;
   font-size: 11px;
   font-weight: 700;
@@ -782,8 +784,29 @@
 
 .roster-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 15px;
   font-weight: 500;
+}
+
+/* Only the name may truncate. The position chip, team and injury flag beside
+   it are short and load-bearing, so they stay whole and the name gives way. */
+.roster-player {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An unfilled slot keeps the circle — without it the names either side of a
+   hole sit on two different left edges, which is exactly what the avatar
+   column is there to prevent. Dashed, so it reads as a gap, not a person. */
+.roster-avatar-open {
+  background: transparent;
+  border: 1px dashed var(--line);
 }
 
 .roster-price {
