@@ -39,7 +39,7 @@ fixture-based tests cannot catch. Run `test:live` before draft day. Don't run
 
 ```
 src/
-  domain/       pure logic, no I/O — types, budget, lineup, market
+  domain/       pure logic, no I/O — types, budget, lineup, market, nomination
   data/         DataAdapter interface + browser implementation, ESPN/FPI/Anthropic clients
   components/   presentational; state comes down as props
   useDraft.ts   draft state, persistence, rankings fetch/cache
@@ -97,6 +97,19 @@ abbreviation) rather than letting a 404 happen.
 adapter must be able to raise the same kinds without importing an HTTP client, and
 message prose changes. `isScoutError` is a structural check so it survives realm
 boundaries.
+
+**Nomination advice is aggregate, never per-team.** The draft log records what
+*we* won and that other players are gone — never which rival bought them. So
+`domain/nomination.ts` can speak about a "typical rival" and nothing more, and
+the banner shows it as `Field ~$N` with a tilde and a title explaining the
+average. Presenting it as a fact about a specific team would be inventing data
+we don't have. `NextMove.tsx` owns the wording and none of the judgement, so
+copy edits never touch the tested logic and the tests assert postures rather
+than sentences.
+
+**Row lookups in `App.dom.test.tsx` scope to `.board`.** The next-move banner
+names a player too, so a bare `getByText('Some Name')` matches both it and that
+player's row and throws. Go through `findRow`/`getRow`/`queryRow`.
 
 **One modal atom.** `App.tsx` holds a single `sheet` state for "a price sheet is
 open", not one boolean per flow. Two independent modal states meant nothing knew a

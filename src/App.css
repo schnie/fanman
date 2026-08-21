@@ -290,6 +290,108 @@
   color: inherit;
 }
 
+/* ---------- next move ---------- */
+
+/* Sits between the sticky header and the board, on the banner's margins so it
+   shares a left edge with everything else on the page. */
+.nextmove {
+  margin: 0 14px 10px;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+/* Drain and buy are opposite instructions. Across a noisy room the tint is the
+   part you actually read, so they get opposite colours rather than a shared
+   box with different words in it. */
+.nextmove-drain {
+  border-color: rgba(47, 129, 247, 0.4);
+  background: rgba(47, 129, 247, 0.1);
+}
+
+.nextmove-buy {
+  border-color: rgba(63, 185, 80, 0.4);
+  background: var(--tint-green);
+}
+
+.nextmove-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.nextmove-posture {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nextmove-drain .nextmove-posture {
+  color: var(--accent);
+}
+
+.nextmove-buy .nextmove-posture {
+  color: var(--green);
+}
+
+.nextmove-rival {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Full-width tap target: this gets used one-handed while someone counts down. */
+.nextmove-pick {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 6px 0;
+  text-align: left;
+}
+
+.nextmove-name {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nextmove-team {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* Pinned to the far edge and never wrapped — it's the number you act on. */
+.nextmove-open {
+  margin-left: auto;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nextmove-open-label {
+  margin-right: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nextmove-why {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* ---------- board ---------- */
 
 .board,

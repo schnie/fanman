@@ -24,7 +24,7 @@ npm run test:live    # hits ESPN for real — run this before draft day
 src/
   domain/       types + budget math (pure, no I/O, heavily tested)
   data/         DataAdapter interface, ESPN client, browser implementation
-  components/   BudgetBar, PlayerRow, BidSheet, Roster, SettingsPane
+  components/   BudgetBar, NextMove, PlayerRow, BidSheet, Roster, SettingsPane
   useDraft.ts   draft state, persistence, rankings fetch/cache
   App.tsx       composition + navigation
 ```
@@ -48,6 +48,41 @@ maxBid    = remaining - (slotsLeft - 1)     // hold $1 back per other open slot
 Lives in `src/domain/budget.ts` and is pure. If you change it, the tests in
 `budget.test.ts` are the spec — including the cases that matter at the edges
 (final slot, full roster, overspend).
+
+### Nomination advice
+
+A banner at the top of the board answers the question you actually face every
+time the room comes round to you: *who do I throw out next, and at what price?*
+
+Nominating is not picking — you almost never win the player you put up — so it
+is judged by what it does to everyone else's money. That gives two opposite
+modes, and the banner names which one you're in:
+
+- **Drain the room.** You're level with the field or ahead, and the sheet is
+  still under-pricing this room. Put up an expensive player you don't need,
+  ideally one the market is already paying over ESPN's book value for, and open
+  at ~60% of what he'll actually go for. Someone takes him off your hands and
+  spends money that can no longer bid against you. The opening price is set low
+  enough that getting stuck with him is a bargain rather than a mistake.
+- **Buy.** Either the field can now outbid you, or inflation has fallen back to
+  par and the room is out of money. Draining now would hand value to whoever
+  still has cash, so nominate someone who fills one of your open starting slots
+  and open at $1 — there is never a reason to bid against yourself.
+
+The header also carries **Field ~$N**: what one *typical* rival can still bid,
+estimated from the money and roster spots left across the room. The draft log
+records that players are gone, never which team bought them, so this is a room
+average and is deliberately shown with a tilde. Lean on it for direction, not as
+a ceiling to plan against.
+
+Tapping a suggestion drops the name into the search box rather than opening a
+bid sheet — a nomination isn't a purchase, so the useful next action is just
+"put him in front of me".
+
+Lives in `src/domain/nomination.ts`, pure and tested in `nomination.test.ts`;
+`components/NextMove.tsx` owns the wording and nothing else. Unpriced players
+(head coaches) are never suggested, because the banner would have to quote a
+number ESPN never published.
 
 ## Data
 

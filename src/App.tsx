@@ -10,12 +10,14 @@ import { BidSheet } from './components/BidSheet'
 import { Roster } from './components/Roster'
 import { SettingsPane } from './components/SettingsPane'
 import { ScrollTopButton } from './components/ScrollTopButton'
+import { NextMove } from './components/NextMove'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
 import { useScrollAnchor } from './lib/useScrollAnchor'
 import { useOnline } from './lib/useOnline'
 import { OP_POSITIONS } from './domain/lineup'
 import { displayRoomPrice, summarizeMarket } from './domain/market'
+import { suggestNomination } from './domain/nomination'
 import type { Player } from './domain/types'
 import './App.css'
 
@@ -57,6 +59,21 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
     [players, draft.picks, draft.state.settings],
   )
 
+  // Who to throw out next, and whether we're draining the room or buying.
+  // Derived from the same market and budget numbers the header shows, so the
+  // banner can never disagree with the bar directly above it.
+  const advice = useMemo(
+    () =>
+      suggestNomination({
+        players,
+        picks: draft.picks,
+        summary: draft.summary,
+        settings: draft.state.settings,
+        market,
+      }),
+    [players, draft.picks, draft.summary, draft.state.settings, market],
+  )
+
   const [tab, setTab] = useState<Tab>('board')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL')
@@ -71,6 +88,17 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   const openBid = useCallback((player: Player) => setSheet({ player, mode: 'bid' }), [])
   const openSold = useCallback((player: Player) => setSheet({ player, mode: 'sold' }), [])
   const searchInput = useRef<HTMLInputElement>(null)
+
+  /**
+   * Tapping a suggestion brings that player to the top of the board rather
+   * than opening a bid sheet — you still have to watch the room bid on him.
+   * Clearing the position filter too, since the suggestion routinely names
+   * someone the current filter is hiding.
+   */
+  const findPlayer = useCallback((player: Player) => {
+    setFilter('ALL')
+    setQuery(player.name)
+  }, [])
 
   // Profiles are free, so unlike the scout this needs no key, no spend dial and
   // no pre-warm — it just follows whichever row is open.
@@ -214,6 +242,10 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
               <button onClick={refresh}>Retry</button>
             </div>
           )}
+          {/* Above the list, below the stale-data warning: it's the first thing
+              you want between nominations, and it scrolls away once you're
+              hunting a name, which is when it stops being the point. */}
+          {players.length > 0 && <NextMove advice={advice} onFind={findPlayer} />}
           {loading && players.length === 0 && <p className="empty">Loading rankings…</p>}
           {!loading && visible.length === 0 && players.length > 0 && (
             <p className="empty">No players match.</p>
