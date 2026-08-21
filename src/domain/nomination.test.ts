@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { suggestNomination } from './nomination'
+import { postureFor, suggestNomination, type MoveAdvice } from './nomination'
 import { picksByPlayer, summarize } from './budget'
 import { summarizeMarket } from './market'
 import { DEFAULT_SETTINGS, type DraftState, type Pick, type Player, type Settings } from './types'
@@ -47,23 +47,33 @@ function advise(players: Player[], log: Pick[] = [], over: Partial<Settings> = {
   })
 }
 
+/**
+ * The same, asserted to have produced a suggestion. Most tests are about
+ * *which* player gets named, so they'd otherwise all open with the same
+ * null-and-kind dance.
+ */
+function move(players: Player[], log: Pick[] = [], over: Partial<Settings> = {}): MoveAdvice {
+  const advice = advise(players, log, over)
+  if (advice?.kind !== 'move') {
+    throw new Error(`expected a suggestion, got ${advice === null ? 'null' : advice.kind}`)
+  }
+  return advice
+}
+
 describe('posture', () => {
-  it('opens the draft by draining — full wallets and a board the sheet under-prices', () => {
-    const advice = advise(board(204))
-    expect(advice.posture).toBe('drain')
-    expect(advice.reason).toBe('rich')
+  it('opens the draft by draining: full wallets and a board the sheet under-prices', () => {
+    expect(move(board(204)).reason).toBe('rich')
   })
 
   it('estimates a typical rival at our own ceiling before anyone has spent', () => {
     // Twelve identical teams: the average rival must be us. A model that can't
     // get the symmetric case right can't be trusted on the asymmetric ones.
-    const advice = advise(board(204))
+    const advice = move(board(204))
     expect(advice.rivalMaxBid).toBe(advice.maxBid)
   })
 
   it('switches to buying once we are outgunned by the field', () => {
-    const advice = advise(board(204), [mine(1, 150)])
-    expect(advice.posture).toBe('buy')
+    const advice = move(board(204), [mine(1, 150)])
     expect(advice.reason).toBe('behind')
     expect(advice.maxBid).toBeLessThan(advice.rivalMaxBid)
   })
@@ -71,36 +81,39 @@ describe('posture', () => {
   it('switches to buying when inflation falls back to par', () => {
     // A richly-valued board: listed value outruns the money, so everything left
     // is a bargain and feeding the room more players donates that value away.
-    const advice = advise(board(204, 200))
-    expect(advice.posture).toBe('buy')
-    expect(advice.reason).toBe('bargains')
+    expect(move(board(204, 200)).reason).toBe('bargains')
   })
 
   it('calls the endgame once rivals are down to $1 bids', () => {
-    const advice = advise(board(10), [gone(1, 99)], { teamCount: 2, slots: 2, budget: 100 })
+    const advice = move(board(10), [gone(1, 99)], { teamCount: 2, slots: 2, budget: 100 })
     expect(advice.reason).toBe('endgame')
     expect(advice.rivalMaxBid).toBeLessThanOrEqual(1)
-    expect(advice.posture).toBe('buy')
   })
 
   it('never risks the last slot on a player we do not want', () => {
-    const advice = advise(board(204), [mine(200, 1)], { slots: 2 })
-    expect(advice.reason).toBe('lastSlot')
-    expect(advice.posture).toBe('buy')
+    expect(move(board(204), [mine(200, 1)], { slots: 2 }).reason).toBe('lastSlot')
   })
 
-  it('goes idle with a full roster', () => {
-    const advice = advise(board(204), [mine(200, 1)], { slots: 1 })
-    expect(advice.posture).toBe('idle')
-    expect(advice.reason).toBe('rosterFull')
-    expect(advice.pick).toBeUndefined()
+  it('maps every reason but "rich" onto buying', () => {
+    // The one place the posture is decided, so the one place it is asserted.
+    expect(postureFor('rich')).toBe('drain')
+    for (const reason of ['behind', 'bargains', 'endgame', 'lastSlot'] as const) {
+      expect(postureFor(reason)).toBe('buy')
+    }
+  })
+
+  it('says nothing at all with a full roster', () => {
+    // The budget bar already announces it; a second notice costs phone height.
+    expect(advise(board(204), [mine(200, 1)], { slots: 1 })).toBeNull()
+  })
+
+  it('says nothing before the board has loaded', () => {
+    expect(advise([])).toBeNull()
   })
 
   it('goes idle rather than inventing a suggestion when nothing is left', () => {
     const players = board(3)
-    const advice = advise(players, players.map((p) => gone(p.id)))
-    expect(advice.posture).toBe('idle')
-    expect(advice.reason).toBe('noBoard')
+    expect(advise(players, players.map((p) => gone(p.id)))?.kind).toBe('idle')
   })
 })
 
@@ -110,9 +123,9 @@ describe('draining', () => {
     // someone else's money being wasted, which is the whole point.
     const players = board(204)
     players[4] = makePlayer({ ...players[4], espnValue: 40 })
-    const advice = advise(players)
-    expect(advice.pick?.player.id).toBe(5)
-    expect(advice.pick?.premium).toBe(16)
+    const advice = move(players)
+    expect(advice.pick.player.id).toBe(5)
+    expect(advice.pick.premium).toBe(16)
   })
 
   it('prefers a position we no longer need over a more expensive one we do', () => {
@@ -126,43 +139,39 @@ describe('draining', () => {
       makePlayer({ id: 103, name: 'Owned B', position: 'RB', marketValue: 5, espnValue: 5 }),
       makePlayer({ id: 104, name: 'Owned C', position: 'RB', marketValue: 5, espnValue: 5 }),
     ]
-    const advice = advise(players, [mine(102, 1), mine(103, 1), mine(104, 1)])
-    expect(advice.posture).toBe('drain')
-    expect(advice.pick?.player.id).toBe(101)
-    expect(advice.pick?.fillsNeed).toBe(false)
+    const advice = move(players, [mine(102, 1), mine(103, 1), mine(104, 1)])
+    expect(advice.pick.player.id).toBe(101)
+    expect(advice.pick.fillsNeed).toBe(false)
   })
 
   it('opens under the expected sale price, so getting stuck is a bargain', () => {
-    const advice = advise(board(204))
-    const pick = advice.pick!
+    const { pick } = move(board(204))
     expect(pick.openAt).toBeGreaterThanOrEqual(1)
     expect(pick.openAt).toBeLessThan(pick.expected)
-    expect(pick.cushion).toBe(pick.expected - pick.openAt)
   })
 
   it('never opens above what we could actually pay', () => {
-    const advice = advise(board(204))
-    expect(advice.pick!.openAt).toBeLessThanOrEqual(advice.maxBid)
+    const advice = move(board(204))
+    expect(advice.pick.openAt).toBeLessThanOrEqual(advice.maxBid)
   })
 
   it('leaves injured players out of the pool — they may not draw the bids', () => {
     const players = board(204)
     for (let i = 0; i < 3; i++) players[i] = makePlayer({ ...players[i], injured: true })
-    const advice = advise(players)
-    expect(advice.pick?.player.injured).toBe(false)
+    const advice = move(players)
+    expect(advice.pick.player.injured).toBe(false)
   })
 })
 
 describe('buying', () => {
   it('opens at $1 — there is no reason to bid against ourselves', () => {
-    const advice = advise(board(204, 200))
-    expect(advice.posture).toBe('buy')
-    expect(advice.pick?.openAt).toBe(1)
+    const advice = move(board(204, 200))
+    expect(advice.pick.openAt).toBe(1)
   })
 
   it('never suggests a player we cannot afford', () => {
-    const advice = advise(board(204, 200), [mine(1, 185)])
-    expect(advice.pick!.expected).toBeLessThanOrEqual(advice.maxBid)
+    const advice = move(board(204, 200), [mine(1, 185)])
+    expect(advice.pick.expected).toBeLessThanOrEqual(advice.maxBid)
   })
 
   it('takes the tail of the tier — the one the room has priced coolest', () => {
@@ -170,9 +179,9 @@ describe('buying', () => {
     // cheaper name.
     const players = board(204, 200)
     players[3] = makePlayer({ ...players[3], espnValue: 203 })
-    const advice = advise(players)
-    expect(advice.pick?.player.id).toBe(4)
-    expect(advice.pick?.premium).toBe(-6)
+    const advice = move(players)
+    expect(advice.pick.player.id).toBe(4)
+    expect(advice.pick.premium).toBe(-6)
   })
 
   it('walks a real WR ladder to the tail of the tier and stops at the cliff', () => {
@@ -200,9 +209,8 @@ describe('buying', () => {
         makePlayer({ id: i + 100, marketValue: 13, espnValue: 13 }),
       ),
     ]
-    const advice = advise(players)
-    expect(advice.posture).toBe('buy')
-    expect(advice.pick?.player.name).toBe('CeeDee Lamb')
+    const advice = move(players)
+    expect(advice.pick.player.name).toBe('CeeDee Lamb')
   })
 
   it('ignores a discount that would cost real value', () => {
@@ -219,9 +227,8 @@ describe('buying', () => {
         makePlayer({ id: i + 10, marketValue: 99, espnValue: 99 }),
       ),
     ]
-    const advice = advise(players)
-    expect(advice.posture).toBe('buy')
-    expect(advice.pick?.player.id).toBe(1)
+    const advice = move(players)
+    expect(advice.pick.player.id).toBe(1)
   })
 
   it('fills a hole rather than chasing the best player left', () => {
@@ -235,12 +242,11 @@ describe('buying', () => {
       makePlayer({ id: 4, name: 'Owned WR C', position: 'WR', marketValue: 5, espnValue: 5 }),
       ...board(200, 200).map((p) => ({ ...p, id: p.id + 100, position: 'TE' })),
     ]
-    const advice = advise(players, [mine(2, 1), mine(3, 1), mine(4, 1)])
-    expect(advice.posture).toBe('buy')
+    const advice = move(players, [mine(2, 1), mine(3, 1), mine(4, 1)])
     // Affordable, and still passed over: it was need that ruled him out.
-    expect(advice.pick!.expected).toBeLessThan(advice.maxBid)
-    expect(advice.pick?.player.position).toBe('TE')
-    expect(advice.pick?.fillsNeed).toBe(true)
+    expect(advice.pick.expected).toBeLessThan(advice.maxBid)
+    expect(advice.pick.player.position).toBe('TE')
+    expect(advice.pick.fillsNeed).toBe(true)
   })
 })
 
@@ -250,8 +256,7 @@ describe('unpriced players', () => {
       makePlayer({ id: 1, marketValue: 60, espnValue: 60 }),
       makePlayer({ id: 2, name: 'Some HC', position: 'HC', marketValue: 0, espnValue: 0 }),
     ]
-    const advice = advise(players, [gone(1)])
-    expect(advice.posture).toBe('idle')
-    expect(advice.reason).toBe('noBoard')
+    // The head coach is the only player left, and he has no price to quote.
+    expect(advise(players, [gone(1)])?.kind).toBe('idle')
   })
 })

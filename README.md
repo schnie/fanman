@@ -90,7 +90,13 @@ bid sheet — a nomination isn't a purchase, so the useful next action is just
 "put him in front of me".
 
 Lives in `src/domain/nomination.ts`, pure and tested in `nomination.test.ts`;
-`components/NextMove.tsx` owns the wording and nothing else. Unpriced players
+`components/NextMove.tsx` owns the wording and nothing else. Finding the tier
+is a fact about the board rather than about this feature, so `positionTier`
+sits in `domain/market.ts` beside `inflation` and `roomPrice` — the row and the
+bid sheet must not each grow their own idea of who counts as a substitute for
+whom. `suggestNomination` returns `null` when there is nothing worth the
+height (no board yet, or a full roster the budget bar already announces), so
+the banner never has to decide that for itself. Unpriced players
 (head coaches) are never suggested, because the banner would have to quote a
 number ESPN never published.
 

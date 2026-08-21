@@ -1,4 +1,4 @@
-import type { NominationAdvice } from '../domain/nomination'
+import { postureFor, type MoveAdvice, type MoveReason, type NominationAdvice } from '../domain/nomination'
 import type { Player } from '../domain/types'
 import { posClass } from '../lib/format'
 import { isTeamEntity, teamAbbr } from '../data/proTeams'
@@ -12,32 +12,33 @@ import { isTeamEntity, teamAbbr } from '../data/proTeams'
  * sentences that will be reworded a dozen times before draft day.
  *
  * Tapping the suggestion searches for that player rather than opening a bid
- * sheet. A nomination is not a purchase — you still have to watch the room
- * bid — so the useful next action is "put him in front of me", and it's the
- * one action that is harmless if the suggestion is wrong.
+ * sheet. A nomination is not a purchase, you still have to watch the room bid,
+ * so the useful next action is "put him in front of me" — and it's the one
+ * action that is harmless if the suggestion is wrong.
  */
 export function NextMove({ advice, onFind }: {
   advice: NominationAdvice
   onFind: (player: Player) => void
 }) {
-  const { pick } = advice
-
-  // A full roster already says so in the budget bar; repeating it here would
-  // just cost a phone screen's worth of height at the moment it matters least.
-  if (advice.reason === 'rosterFull') return null
-  if (!pick) {
+  // Whether there is anything worth showing at all is the domain's call, not
+  // this component's: it hands back `null` for that and an idle advice for a
+  // board we simply can't bid into.
+  if (advice.kind === 'idle') {
     return (
-      <section className="nextmove nextmove-idle" aria-label="Suggested nomination">
+      <section className="nextmove" aria-label="Suggested nomination">
         <p className="nextmove-why">Nothing left you can bid on. Fill the rest at $1.</p>
       </section>
     )
   }
 
-  const { player } = pick
+  const { player } = advice.pick
   const team = isTeamEntity(player.id) ? null : teamAbbr(player.proTeamId)
 
   return (
-    <section className={`nextmove nextmove-${advice.posture}`} aria-label="Suggested nomination">
+    <section
+      className={`nextmove nextmove-${postureFor(advice.reason)}`}
+      aria-label="Suggested nomination"
+    >
       <div className="nextmove-head">
         <span className="nextmove-posture">{POSTURE_LABEL[advice.reason]}</span>
         {/* The comparison that decides the whole strategy, so it earns a spot
@@ -58,7 +59,7 @@ export function NextMove({ advice, onFind }: {
           {team && <span className="nextmove-team">{team}</span>}
         </span>
         <span className="nextmove-open">
-          <span className="nextmove-open-label">Open</span>${pick.openAt}
+          <span className="nextmove-open-label">Open</span>${advice.pick.openAt}
         </span>
       </button>
 
@@ -67,22 +68,19 @@ export function NextMove({ advice, onFind }: {
   )
 }
 
-const POSTURE_LABEL: Record<NominationAdvice['reason'], string> = {
+/** Two or three words for the header chip. The sentence is `explain`'s job. */
+const POSTURE_LABEL: Record<MoveReason, string> = {
   rich: 'Drain the room',
   behind: 'Buy now',
   bargains: 'Value is out there',
   endgame: 'Endgame',
   lastSlot: 'Last slot',
-  rosterFull: 'Roster full',
-  noBoard: 'Board empty',
 }
 
-function explain(advice: NominationAdvice): string {
-  const pick = advice.pick
-  if (!pick) return 'Nothing left you can bid on. Fill the rest at $1.'
+function explain({ reason, pick, rivalMaxBid, maxBid }: MoveAdvice): string {
   const likely = `Likely goes ~$${pick.expected}.`
 
-  switch (advice.reason) {
+  switch (reason) {
     case 'rich': {
       // "You don't need him" is only true once a slot has actually been
       // filled. At the opening nomination every position is still open, so the
@@ -94,17 +92,16 @@ function explain(advice: NominationAdvice): string {
           : pick.fillsNeed
             ? `Expensive enough to move real money out of the room.`
             : `You don't need him, and he'll move real money.`
-      return `${lead} ${likely} If it sticks at $${pick.openAt} you got him $${pick.cushion} under.`
+      const cushion = pick.expected - pick.openAt
+      return `${lead} ${likely} If it sticks at $${pick.openAt} you got him $${cushion} under.`
     }
     case 'behind':
-      return `The field can outbid you (~$${advice.rivalMaxBid} vs your $${advice.maxBid}), so every round you wait puts your targets further out. ${likely}`
+      return `The field can outbid you (~$${rivalMaxBid} vs your $${maxBid}), so every round you wait puts your targets further out. ${likely}`
     case 'bargains':
       return `Prices are back to par, so draining now just hands value to whoever still has cash. ${likely} Open at $1.`
     case 'endgame':
-      return `Rivals are down to ~$${advice.rivalMaxBid} bids. Open at $1 and he's probably yours.`
+      return `Rivals are down to ~$${rivalMaxBid} bids. Open at $1 and he's probably yours.`
     case 'lastSlot':
       return `One slot left. Spend it on someone you actually want. ${likely}`
-    default:
-      return likely
   }
 }

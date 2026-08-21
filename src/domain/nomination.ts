@@ -1,7 +1,13 @@
-import type { BudgetSummary } from './budget'
+import { wonPicksFrom, type BudgetSummary } from './budget'
 import { buildLineup, STARTER_SLOTS } from './lineup'
-import { inflationIsMeaningful, roomPrice, type MarketState } from './market'
-import { isUnpriced, marketPremium, type Pick, type Player, type Settings } from './types'
+import {
+  availablePlayers,
+  inflationIsMeaningful,
+  positionTier,
+  roomPrice,
+  type MarketState,
+} from './market'
+import { marketPremium, type Pick, type Player, type Settings } from './types'
 
 /**
  * What to throw out next, and why.
@@ -24,9 +30,10 @@ import { isUnpriced, marketPremium, type Pick, type Player, type Settings } from
  * "typical rival" and never about a specific team. The UI must not present
  * these as per-team facts.
  */
-export type Posture = 'drain' | 'buy' | 'idle'
+export type Posture = 'drain' | 'buy'
 
-export type NominationReason =
+/** Why we're in the posture we're in. Each of these comes with a suggestion. */
+export type MoveReason =
   /** Ahead of the field, and the sheet still under-prices this room. */
   | 'rich'
   /** The typical rival outguns us — every round we wait, our targets drift further away. */
@@ -37,9 +44,15 @@ export type NominationReason =
   | 'endgame'
   /** One slot left. It has to be someone we actually want. */
   | 'lastSlot'
-  | 'rosterFull'
-  /** Nothing left on the board worth suggesting. */
-  | 'noBoard'
+
+/**
+ * The posture is a total function of the reason, so it is derived rather than
+ * carried alongside it — two fields that can disagree is one more thing to
+ * keep in step every time a reason is added.
+ */
+export function postureFor(reason: MoveReason): Posture {
+  return reason === 'rich' ? 'drain' : 'buy'
+}
 
 export interface NominationPick {
   player: Player
@@ -47,17 +60,13 @@ export interface NominationPick {
   openAt: number
   /** What this player is likely to actually go for in this room. */
   expected: number
-  /** How far under the expected sale price the opening bid sits. */
-  cushion: number
   /** True when the player would fill a starting slot we still have open. */
   fillsNeed: boolean
   /** Room price over ESPN's book value — the size of the overpay we're handing off. */
   premium: number
 }
 
-export interface NominationAdvice {
-  posture: Posture
-  reason: NominationReason
+interface AdviceBase {
   /**
    * What one *typical* rival team can still bid, estimated from the money and
    * roster spots left across the room. The comparison against our own ceiling
@@ -66,8 +75,26 @@ export interface NominationAdvice {
   rivalMaxBid: number
   /** Our ceiling, carried through so the banner needn't re-derive it. */
   maxBid: number
-  pick?: NominationPick
 }
+
+/** There is a board, but nothing on it we can bid on. Worth saying; no move. */
+export interface IdleAdvice extends AdviceBase {
+  kind: 'idle'
+}
+
+export interface MoveAdvice extends AdviceBase {
+  kind: 'move'
+  reason: MoveReason
+  pick: NominationPick
+}
+
+/**
+ * `null` means "not worth a phone screen's height" — no board yet, or a full
+ * roster, which the budget bar already announces. Saying it here rather than
+ * letting the banner branch on a reason string keeps the silent/spoken call
+ * in one place, where a new reason has to face it.
+ */
+export type NominationAdvice = IdleAdvice | MoveAdvice
 
 export interface NominationInput {
   players: Player[]
@@ -83,41 +110,6 @@ export interface NominationInput {
  * field's ceiling is the point where waiting genuinely costs us targets.
  */
 const BEHIND_MARGIN = 0.9
-
-/**
- * Roughly one nomination round in a twelve-team league — the players actually
- * in play right now. Draining with anyone deeper than this moves too little
- * money to be worth a turn.
- */
-const DRAIN_POOL = 12
-
-/**
- * A tier ends where the price ladder falls off a cliff, and this is how big a
- * step counts as one: the next player keeping less than 88% of the last.
- *
- * Measured against a live top-200 board rather than guessed. Two findings set
- * this, and the first is the load-bearing one:
- *
- * **Tiers are positional.** Down the *cross-position* price ladder the median
- * step keeps 97.8% and even the 5th percentile keeps 87.5% — with every
- * position interleaved the ladder is effectively continuous, and walking it
- * for a cliff runs 64 players deep and finds nothing meaningful. Inside a
- * single position the structure is real and obvious: the 2026 WR ladder runs
- * 97%, 98%, 95%, 91%, 97% and then drops to 80%. That 80% is a tier boundary
- * you can see from across the room; nothing cross-position looks like it.
- *
- * **88% clears the noise.** It sits above the observed within-position breaks
- * (80% at WR, 83% at RB) and below the ordinary step, so it cuts at cliffs and
- * nowhere else.
- */
-const TIER_CLIFF = 0.88
-
-/**
- * A backstop on how far the cliff walk may run, not the definition of a tier.
- * The walk normally stops on its own; this only bounds the degenerate case of
- * a long flat run of near-identical prices deep in the board.
- */
-const TIER_DEPTH = 8
 
 /**
  * Where to open a drain nomination, as a share of the expected sale price.
@@ -136,33 +128,24 @@ export function suggestNomination({
   summary,
   settings,
   market,
-}: NominationInput): NominationAdvice {
-  const rivalMaxBid = typicalRivalMaxBid(summary, settings, market)
-  const base = { rivalMaxBid, maxBid: summary.maxBid }
+}: NominationInput): NominationAdvice | null {
+  // No board yet is not the same as an exhausted one, and neither is worth a
+  // banner: the first has nothing to say, the second is already on the header.
+  if (players.length === 0 || summary.rosterFull) return null
 
-  if (summary.rosterFull) return { ...base, posture: 'idle', reason: 'rosterFull' }
+  const base: AdviceBase = { rivalMaxBid: typicalRivalMaxBid(summary, settings, market), maxBid: summary.maxBid }
+  const needed = openStarterPositions(wonPicksFrom(picks), players, settings.slots)
+  const available = availablePlayers(players, picks)
 
-  const byId = new Map(players.map((p) => [p.id, p]))
-  const won = [...picks.values()].filter((p) => p.status === 'mine')
-  const needed = openStarterPositions(won, byId, settings.slots)
-
-  // Unpriced players (head coaches, the deepest bench) are excluded rather than
-  // given an invented price: a nomination banner quoting a number ESPN never
-  // published would be exactly the thing the rest of the app refuses to do.
-  const available = players.filter((p) => !picks.has(p.id) && !isUnpriced(p))
-  if (available.length === 0) return { ...base, posture: 'idle', reason: 'noBoard' }
-
-  const reason = decideReason(summary, market, rivalMaxBid)
-  const posture: Posture = reason === 'rich' ? 'drain' : 'buy'
+  const reason = decideReason(summary, market, base.rivalMaxBid)
   const pick =
-    posture === 'drain'
-      ? drainPick(available, needed, market)
+    postureFor(reason) === 'drain'
+      ? drainPick(available, needed, settings, market)
       : buyPick(available, needed, summary, market)
 
-  // Nothing affordable is itself the answer, not a missing one: with no pick
-  // the banner drops to the posture line rather than inventing a suggestion.
-  if (!pick) return { ...base, posture: 'idle', reason: 'noBoard' }
-  return { ...base, posture, reason, pick }
+  // Nothing we can bid on is itself the answer, not a missing one.
+  if (!pick) return { ...base, kind: 'idle' }
+  return { ...base, kind: 'move', reason, pick }
 }
 
 /**
@@ -173,7 +156,7 @@ function decideReason(
   summary: BudgetSummary,
   market: MarketState,
   rivalMaxBid: number,
-): NominationReason {
+): MoveReason {
   // A last slot spent on a drain nomination that stuck would end the draft on a
   // player we never wanted. Never risk it for a strategic gain we can't cash.
   if (summary.slotsLeft <= 1) return 'lastSlot'
@@ -182,7 +165,7 @@ function decideReason(
   if (summary.maxBid < rivalMaxBid * BEHIND_MARGIN) return 'behind'
   // Par inflation means the money has drained out of the room on its own.
   // Feeding it more players now donates value to whoever is left holding cash.
-  if (!(inflationIsMeaningful(market.inflation) && market.inflation > 1)) return 'bargains'
+  if (market.inflation <= 1 || !inflationIsMeaningful(market.inflation)) return 'bargains'
   return 'rich'
 }
 
@@ -213,13 +196,18 @@ function typicalRivalMaxBid(
 }
 
 /** Positions that would fill a starting slot we still have open. */
-function openStarterPositions(
-  won: Pick[],
-  byId: Map<number, Player>,
-  slots: number,
-): Set<string> {
+function openStarterPositions(won: Pick[], players: Player[], slots: number): Set<string> {
+  // Only won picks are ever looked up, so the map is built from those rather
+  // than from the whole board.
+  const byId = new Map<number, Player>()
+  for (const pick of won) {
+    const player = players.find((p) => p.id === pick.playerId)
+    if (player) byId.set(pick.playerId, player)
+  }
+
   const defs = new Map(STARTER_SLOTS.map((d) => [d.id, d]))
   const lineup = buildLineup(won, byId, slots)
+
   const needed = new Set<string>()
   for (const row of lineup.starters) {
     if (row.pick) continue
@@ -229,15 +217,21 @@ function openStarterPositions(
 }
 
 /**
+ * Narrow to the players we'd rather have, but never to none of them: an empty
+ * result means the preference could not be honoured, not that there is nothing
+ * to nominate. Written once because all three narrowings below want it.
+ */
+function prefer(players: Player[], keep: (p: Player) => boolean): Player[] {
+  const kept = players.filter(keep)
+  return kept.length > 0 ? kept : players
+}
+
+/**
  * Injured players make poor suggestions in both modes: as a drain they may not
  * draw the bids that make the strategy work, and as a buy the banner would be
- * pushing a risk the user hasn't opened the row to see. Only fall back to them
- * when the board offers nothing else.
+ * pushing a risk the user hasn't opened the row to see.
  */
-function preferHealthy(players: Player[]): Player[] {
-  const healthy = players.filter((p) => !p.injured)
-  return healthy.length > 0 ? healthy : players
-}
+const preferHealthy = (players: Player[]) => prefer(players, (p) => !p.injured)
 
 const byValueDesc = (a: Player, b: Player) => b.marketValue - a.marketValue
 
@@ -245,26 +239,31 @@ const byValueDesc = (a: Player, b: Player) => b.marketValue - a.marketValue
  * Drain: an expensive player we don't need, ideally one the room is already
  * paying over book for. The premium is the point — it is someone else's money
  * being wasted, and we would rather it were wasted than aimed at our targets.
+ *
+ * The pool is one nomination round deep, which is what `teamCount` means: the
+ * players actually in play before it is our turn again. Anyone deeper moves
+ * too little money to be worth a turn.
  */
 function drainPick(
   available: Player[],
   needed: Set<string>,
+  settings: Settings,
   market: MarketState,
 ): NominationPick | undefined {
-  const pool = preferHealthy([...available].sort(byValueDesc).slice(0, DRAIN_POOL))
-  const spare = pool.filter((p) => !needed.has(p.position))
-  const candidates = spare.length > 0 ? spare : pool
+  const round = Math.max(1, settings.teamCount)
+  const pool = preferHealthy([...available].sort(byValueDesc).slice(0, round))
+  const candidates = prefer(pool, (p) => !needed.has(p.position))
 
-  const player = [...candidates].sort(
+  const player = candidates.sort(
     (a, b) => marketPremium(b) - marketPremium(a) || b.marketValue - a.marketValue,
   )[0]
   return player && toPick(player, needed, market, 'drain')
 }
 
 /**
- * Buy: the best player we can actually afford who fills a hole, favouring the
- * tail of his tier — the near-identical player the room has priced lower
- * because his name sits further down the sheet.
+ * Buy: the best player we can afford who fills a hole, then the tail of his
+ * tier — the near-identical player the room has priced lower because his name
+ * sits further down the sheet.
  */
 function buyPick(
   available: Player[],
@@ -278,23 +277,10 @@ function buyPick(
   })
   if (affordable.length === 0) return undefined
 
-  const wanted = affordable.filter((p) => needed.has(p.position))
-  const pool = preferHealthy(wanted.length > 0 ? wanted : affordable)
+  const pool = preferHealthy(prefer(affordable, (p) => needed.has(p.position)))
+  const leader = [...pool].sort(byValueDesc)[0]
 
-  // The tier is found, not assumed: start at the best player we can afford and
-  // walk his *position's* ladder down until the price falls off a cliff. Only
-  // inside that run are two players substitutes, and only there does taking
-  // the cheaper name cost nothing. Cross-position the ladder has no cliffs to
-  // find, which is why this filters to one position first.
-  const ranked = [...pool].sort(byValueDesc)
-  const ladder = ranked.filter((p) => p.position === ranked[0].position)
-  const tier = [ladder[0]]
-  for (let i = 0; i + 1 < ladder.length && tier.length < TIER_DEPTH; i++) {
-    if (ladder[i + 1].marketValue < ladder[i].marketValue * TIER_CLIFF) break
-    tier.push(ladder[i + 1])
-  }
-
-  const player = [...tier].sort(
+  const player = positionTier(pool, leader).sort(
     (a, b) => marketPremium(a) - marketPremium(b) || b.marketValue - a.marketValue,
   )[0]
   return player && toPick(player, needed, market, 'buy')
@@ -304,7 +290,7 @@ function toPick(
   player: Player,
   needed: Set<string>,
   market: MarketState,
-  posture: Exclude<Posture, 'idle'>,
+  posture: Posture,
 ): NominationPick {
   const expected = roomPrice(player, market.inflation) ?? Math.round(player.marketValue)
   // Opening at $1 when we want the player: there is never a reason to bid
@@ -318,7 +304,6 @@ function toPick(
     player,
     openAt,
     expected,
-    cushion: expected - openAt,
     fillsNeed: needed.has(player.position),
     premium: marketPremium(player),
   }

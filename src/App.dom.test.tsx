@@ -77,15 +77,14 @@ const maxBid = () => within(bar()).getByText(/^\$|—/, { selector: '.budget-max
  * matches both it and that player's row. Anything looking for a *row* goes
  * through these and scopes to the board list.
  */
-const board = () => document.querySelector('.board') as HTMLElement
-/** Waits the list out: App renders "Loading draft…" before the board exists. */
-const boardList = () =>
-  waitFor(() => {
-    const el = board()
-    if (!el) throw new Error('board not rendered yet')
-    return el
-  })
-const findRow = async (name: string) => within(await boardList()).findByText(name)
+function board(): HTMLElement {
+  // App renders "Loading draft…" before the list exists, so this is genuinely
+  // absent early. Throwing beats `within(null)`, whose TypeError says nothing.
+  const list = document.querySelector('.board')
+  if (!list) throw new Error('board not rendered yet')
+  return list as HTMLElement
+}
+const findRow = (name: string) => waitFor(() => within(board()).getByText(name))
 const getRow = (name: string) => within(board()).getByText(name)
 const queryRow = (name: string) => within(board()).queryByText(name)
 
@@ -568,7 +567,7 @@ describe('draft board end to end', () => {
     await findRow('Jahmyr Gibbs')
 
     await user.click(screen.getByRole('button', { name: 'QB' }))
-    expect(screen.getByText('Josh Allen')).toBeInTheDocument()
+    expect(getRow('Josh Allen')).toBeInTheDocument()
     expect(queryRow('Jahmyr Gibbs')).not.toBeInTheDocument()
   })
 })

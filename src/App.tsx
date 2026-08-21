@@ -244,8 +244,10 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           )}
           {/* Above the list, below the stale-data warning: it's the first thing
               you want between nominations, and it scrolls away once you're
-              hunting a name, which is when it stops being the point. */}
-          {players.length > 0 && <NextMove advice={advice} onFind={findPlayer} />}
+              hunting a name, which is when it stops being the point. `advice`
+              is null when there is nothing worth the height — the domain makes
+              that call, so there is no second guard here. */}
+          {advice && <NextMove advice={advice} onFind={findPlayer} />}
           {loading && players.length === 0 && <p className="empty">Loading rankings…</p>}
           {!loading && visible.length === 0 && players.length > 0 && (
             <p className="empty">No players match.</p>
