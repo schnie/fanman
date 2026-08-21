@@ -608,6 +608,88 @@ describe('draft board end to end', () => {
     expect(avatarFor('Jahmyr Gibbs')).toBe(before)
   })
 
+  it('keeps the same roster avatars across a trip to another tab', async () => {
+    // The mirror of the board's guarantee, for the same reason: the roster
+    // grew faces of its own, and unmounting it dropped their decoded pixels
+    // every time you went back to the board. Same assertion — same element
+    // means nothing has to be fetched, decoded or lazily deferred on return.
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 3, status: 'mine', price: 40, at: 0 }], // Josh Allen → QB
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+
+    const rosterAvatar = () =>
+      screen.getByText('Josh Allen').closest('.roster-row')!.querySelector('img')
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    const before = rosterAvatar()
+    expect(before).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    // Hidden, so the roster is out of the accessibility tree while the board
+    // is up — mounted is not the same as reachable.
+    expect(screen.queryByRole('listitem', { name: /Josh Allen/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    expect(rosterAvatar()).toBe(before)
+  })
+
+  it('loads roster faces eagerly and board faces lazily', async () => {
+    // The two halves of one decision, so they are asserted together. A lazy
+    // image inside `display: none` never starts — it cannot be near the
+    // viewport — so a lazy roster would still pay full price on the first
+    // look at My team, which is exactly what keeping it mounted was meant to
+    // avoid. Eager loads those few faces while the panel is hidden.
+    //
+    // The board must stay lazy: ~230 rows would otherwise fire ~230 requests
+    // on first paint to decorate the handful actually on screen. Flipping the
+    // default to spare the roster a prop would do precisely that.
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 3, status: 'mine', price: 40, at: 0 }], // Josh Allen → QB
+    }
+    const { container } = render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+
+    expect(container.querySelector('.board img')!.getAttribute('loading')).toBe('lazy')
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    const face = screen.getByText('Josh Allen').closest('.roster-row')!.querySelector('img')
+    expect(face!.getAttribute('loading')).toBe('eager')
+  })
+
+  it('shows exactly one panel at a time now that both stay mounted', async () => {
+    // Both panels live in the DOM permanently, so "which tab am I on" is no
+    // longer answered by what exists — it is answered by `hidden`. A missing
+    // `hidden` would stack the roster under the board and every test above
+    // would still pass, because everything they query would still be found.
+    const user = userEvent.setup()
+    const { container } = render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    const boardPanel = container.querySelector('.board-panel')!
+    const rosterPanel = container.querySelector('.roster-panel')!
+
+    expect(boardPanel.hasAttribute('hidden')).toBe(false)
+    expect(rosterPanel.hasAttribute('hidden')).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    expect(boardPanel.hasAttribute('hidden')).toBe(true)
+    expect(rosterPanel.hasAttribute('hidden')).toBe(false)
+
+    // Settings is still genuinely unmounted, so a third panel is not silently
+    // sharing the screen with the other two.
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(boardPanel.hasAttribute('hidden')).toBe(true)
+    expect(rosterPanel.hasAttribute('hidden')).toBe(true)
+  })
+
   it('marks every row so the scroll anchor can find it again', async () => {
     // useScrollAnchor locates the tapped row by this attribute after the
     // accordion has moved. Drop it and the hook degrades silently: no error,
