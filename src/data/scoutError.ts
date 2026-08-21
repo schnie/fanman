@@ -6,7 +6,26 @@
  * able to raise the same kinds without importing an HTTP client. Callers branch
  * on `kind` — never on the message text, which is prose and will change.
  */
-export type ScoutErrorKind = 'auth' | 'rate-limit' | 'refusal' | 'network' | 'other'
+export type ScoutErrorKind =
+  | 'auth'
+  | 'billing'
+  | 'rate-limit'
+  | 'refusal'
+  | 'network'
+  | 'other'
+
+/**
+ * Kinds that will fail identically for the very next player.
+ *
+ * A rejected key and an empty credit balance are facts about the account, not
+ * about the player, so working through a queued board just reproduces the same
+ * failure once per row. They pause the pre-warm; they never disable the manual
+ * retry, because both are things the user can fix in another tab and then try
+ * again — and a draft that cannot retry is a draft that has to be reset.
+ */
+export function isAccountProblem(kind: ScoutErrorKind): boolean {
+  return kind === 'auth' || kind === 'billing'
+}
 
 export class ScoutError extends Error {
   readonly kind: ScoutErrorKind

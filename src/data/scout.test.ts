@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { parseScoutReport, scoutPrompt, textOf } from './scout'
+import Anthropic from '@anthropic-ai/sdk'
+import { asScoutError, parseScoutReport, readableApiMessage, scoutPrompt, textOf } from './scout'
+import { ScoutError } from './scoutError'
 import type { Player } from '../domain/types'
 import { makePlayer } from '../test/factories'
 
@@ -108,5 +110,131 @@ describe('textOf', () => {
 
   it('returns an empty string when a turn produced only tool calls', () => {
     expect(textOf([{ type: 'server_tool_use' }])).toBe('')
+  })
+})
+
+/**
+ * The API's failures are the drafter's failures: these all used to arrive as
+ * `400 {"type":"error",…}` printed into a row on a phone, which says nothing
+ * about what to do and buries the Retry button under a wall of braces.
+ */
+describe('readableApiMessage', () => {
+  const body = (message: string) =>
+    JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message } })
+
+  it('pulls the sentence out of an SDK message', () => {
+    const text = readableApiMessage(`400 ${body('Your credit balance is too low.')}`)
+    expect(text).toBe('Your credit balance is too low.')
+  })
+
+  it('reads a bare error body too', () => {
+    expect(readableApiMessage(body('Something went wrong.'))).toBe('Something went wrong.')
+  })
+
+  it('passes prose straight through', () => {
+    expect(readableApiMessage('Connection refused')).toBe('Connection refused')
+  })
+
+  it('shows nothing rather than JSON it cannot unwrap', () => {
+    expect(readableApiMessage('500 {not json at all}')).toBe('')
+    expect(readableApiMessage(JSON.stringify({ nested: { deep: true } }))).toBe('')
+  })
+
+  it('shows nothing rather than a captive portal in the row', () => {
+    // Venue wifi answers with a login page and the SDK hands the HTML through
+    // as the message. Braces are not the only way to print a raw response.
+    const html = '407 <!DOCTYPE html><html><head><title>Proxy Authentication</title></head>'
+    expect(readableApiMessage(html)).toBe('')
+  })
+
+  it('drops the SDK\'s own filler for a bodiless failure', () => {
+    expect(readableApiMessage('400 status code (no body)')).toBe('')
+    expect(readableApiMessage('418   ')).toBe('')
+  })
+
+  it('truncates a message too long to read mid-bid', () => {
+    const long = readableApiMessage('x'.repeat(400))
+    expect(long.length).toBeLessThanOrEqual(160)
+    expect(long.endsWith('…')).toBe(true)
+  })
+
+  it('ignores anything that is not a string', () => {
+    expect(readableApiMessage(undefined)).toBe('')
+    expect(readableApiMessage({ message: 'hi' })).toBe('')
+  })
+})
+
+describe('asScoutError', () => {
+  const apiError = (status: number, type: string, message: string) =>
+    Anthropic.APIError.generate(
+      status,
+      { type: 'error', error: { type, message } },
+      undefined,
+      new Headers(),
+    )
+
+  const kindOf = (err: unknown) => {
+    const scoutError = asScoutError(err)
+    expect(scoutError).toBeInstanceOf(ScoutError)
+    return scoutError
+  }
+
+  it('names an empty balance as an empty balance', () => {
+    // Arrives as a plain 400, so a status-ordered ladder would call it a bad
+    // request — true, useless, and not something the drafter can act on.
+    const err = kindOf(
+      apiError(400, 'invalid_request_error', 'Your credit balance is too low to access the API.'),
+    )
+    expect(err.kind).toBe('billing')
+    expect(err.message).toMatch(/credit/i)
+    expect(err.message).not.toContain('{')
+  })
+
+  it('recognises the billing error type whatever the wording says', () => {
+    expect(kindOf(apiError(400, 'billing_error', 'Payment required.')).kind).toBe('billing')
+  })
+
+  it('sends a rejected key back to Settings', () => {
+    const err = kindOf(apiError(401, 'authentication_error', 'invalid x-api-key'))
+    expect(err.kind).toBe('auth')
+    expect(err.message).toMatch(/Settings/)
+  })
+
+  it('treats a forbidden key as a key problem, not a mystery', () => {
+    expect(kindOf(apiError(403, 'permission_error', 'not allowed')).kind).toBe('auth')
+  })
+
+  it('asks for patience on a rate limit or an overload', () => {
+    expect(kindOf(apiError(429, 'rate_limit_error', 'slow down')).kind).toBe('rate-limit')
+    expect(kindOf(apiError(529, 'overloaded_error', 'overloaded')).message).toMatch(/busy/i)
+    expect(kindOf(apiError(500, 'api_error', 'boom')).message).toMatch(/busy/i)
+  })
+
+  it('keeps an unknown API failure in English, with the reason appended', () => {
+    const err = kindOf(apiError(400, 'invalid_request_error', 'max_tokens too large'))
+    expect(err.kind).toBe('other')
+    expect(err.message).toBe('Claude could not run this check: max_tokens too large')
+  })
+
+  it('still says something when the body carries no message', () => {
+    const err = kindOf(Anthropic.APIError.generate(400, {}, undefined, new Headers()))
+    expect(err.message).toBe('Claude could not run this check')
+    expect(err.message).not.toContain('{')
+  })
+
+  it('passes a ScoutError through untouched', () => {
+    const original = new ScoutError('Claude declined to answer for this player', 'refusal')
+    expect(asScoutError(original)).toBe(original)
+  })
+
+  it('names a connection failure as one', () => {
+    const err = kindOf(new Anthropic.APIConnectionError({ message: 'fetch failed' }))
+    expect(err.kind).toBe('network')
+    expect(err.message).toMatch(/connection/i)
+  })
+
+  it('falls back to a retryable sentence for anything else', () => {
+    expect(kindOf(new Error('')).message).toBe('Scout failed — retry')
+    expect(kindOf('a string').message).toBe('Scout failed — retry')
   })
 })

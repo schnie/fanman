@@ -139,9 +139,151 @@ describe('useScout', () => {
     })
     const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 5))
 
-    await waitFor(() => expect(result.current.hasKey).toBe(false))
+    await waitFor(() => expect(result.current.paused).toBe(true))
     await new Promise((r) => setTimeout(r, 30))
     expect(scouted.length).toBeLessThan(5)
+  })
+
+  it('stops the queue when the account is out of credit', async () => {
+    // Same shape as a bad key: an account-level failure that every remaining
+    // row would reproduce, one wasted request at a time.
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        throw new ScoutError('Out of Claude API credit', 'billing')
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 5))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    await new Promise((r) => setTimeout(r, 30))
+    expect(scouted.length).toBeLessThan(5)
+    expect(result.current.calls).toBe(0) // a rejected call was never billed
+  })
+
+  it('still allows a manual retry after an account failure', async () => {
+    // The regression this exists for: an account failure used to clear
+    // `hasKey`, which took the Retry button off every row. The only ways back
+    // were re-saving the key or resetting the whole draft, mid-auction.
+    let failing = true
+    const { adapter } = makeAdapter({
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        if (failing) throw new ScoutError('Out of Claude API credit', 'billing')
+        return makeReport(p.id)
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 2))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    expect(result.current.hasKey).toBe(true) // the key is still there; it is the balance that isn't
+
+    failing = false // topped up in the other tab
+    act(() => result.current.scoutNow(BOARD[0]))
+
+    await waitFor(() => expect(result.current.reports.has(1)).toBe(true))
+    expect(result.current.errors.has(1)).toBe(false)
+    // One good call means the account is healthy again, so the pre-warm resumes.
+    await waitFor(() => expect(result.current.paused).toBe(false))
+  })
+
+  it('does not let the pre-warm refill behind a manual retry', async () => {
+    // Lifting the pause on the *request* would put the whole top of the board
+    // back in the queue while the retry is still in flight — and if the retry
+    // fails too, that is the original error paid for once per row.
+    let release!: () => void
+    const inFlight = new Promise<void>((r) => (release = r))
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        if (p.id === 1) await inFlight // held open so a slot never frees on its own
+        throw new ScoutError('Out of Claude API credit', 'billing')
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 5))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    const before = scouted.length
+
+    act(() => result.current.scoutNow(BOARD[4]))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(scouted.length).toBe(before + 1) // just the retry
+
+    await act(async () => {
+      release()
+      await inFlight
+    })
+  })
+
+  it('does not let a call already in flight lift the pause', async () => {
+    // Two calls run at once, so the last of the credit can be spent by one of
+    // them while the other comes back empty-handed: B fails `billing` and
+    // pauses, then A — started earlier, and the reason there is nothing left —
+    // succeeds. Treating that as proof the account is healthy refilled the
+    // queue with calls that could only fail.
+    let release!: () => void
+    const inFlight = new Promise<void>((r) => (release = r))
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        if (p.id !== 1) throw new ScoutError('Out of Claude API credit', 'billing')
+        await inFlight
+        return makeReport(1)
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 5))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    const before = scouted.length
+
+    await act(async () => {
+      release()
+      await inFlight
+    })
+    await waitFor(() => expect(result.current.reports.has(1)).toBe(true))
+
+    expect(result.current.paused).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(scouted).toHaveLength(before)
+  })
+
+  it('resumes on a new key, not on the same one saved again', async () => {
+    // Reopening Settings and tapping Save is the reflex when a draft stalls.
+    // Nothing about the account changed, so resuming on it just buys another
+    // round of the same failure.
+    let key = 'sk-ant-bad'
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async loadApiKey() {
+        return key
+      },
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        if (key === 'sk-ant-bad') throw new ScoutError('API key rejected', 'auth')
+        return makeReport(p.id)
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 2))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    const before = scouted.length
+
+    await act(async () => {
+      await result.current.refreshKey()
+    })
+    expect(result.current.paused).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(scouted).toHaveLength(before)
+
+    key = 'sk-ant-good'
+    await act(async () => {
+      await result.current.refreshKey()
+    })
+
+    await waitFor(() => expect(result.current.reports.size).toBeGreaterThan(0))
+    expect(result.current.paused).toBe(false)
   })
 
   it('counts calls so spend is visible', async () => {

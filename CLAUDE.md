@@ -83,6 +83,34 @@ that set needed hand-clearing on a key change and on a manual re-check, and both
 clears were paths to double-billing. Restored reports suppress the pre-warm.
 `Auto-check top N` is a spend dial; 0 disables it.
 
+**A scout failure never removes the way back.** An account-level failure — a
+rejected key, an empty credit balance (`isAccountProblem` in `data/scoutError.ts`)
+— pauses the *pre-warm* only, through `paused` in `useScout`. It used to be
+expressed by clearing `hasKey`, which is also what every Retry and "Scout this
+player" button hangs off, so one failure took manual checking away from the whole
+board and the only ways back were re-saving the key or resetting the draft —
+mid-auction, with the room counting down.
+
+What lifts the pause is narrow, and each narrowing is a way the queue found to
+refill itself with calls that could only fail. A *successful* call lifts it,
+never the retry request — lifting it on the request lets the pre-warm refill
+behind the in-flight retry and pay for the same failure once per row. And only
+a success from a call that started *after* the pause, which is what
+`pauseEpoch` is for: with two calls in flight, the one that spent the last of
+the credit can land after the one that found none left. A key change in
+Settings lifts it too, but only a genuinely different key — compared by
+fingerprint, so the hook never holds the secret — because re-saving the same
+key is the reflex when a draft stalls and it says nothing about the account.
+
+**An error a bidder reads is prose, not a body.** `asScoutError` in `data/scout.ts`
+maps every failure onto a `kind` and a sentence naming the next action, and
+`readableApiMessage` unwraps the SDK's `"400 {…json…}"` message shape — dropping
+anything that isn't prose rather than showing it, JSON and markup alike: the SDK
+passes an unparseable body through as the message, so on venue wifi a captive
+portal's HTML arrives by the same route as the JSON did. Billing is matched
+before the status ladder, because an exhausted balance arrives as a plain 400 and
+"bad request" is true, useless, and unactionable.
+
 **Profiles are free, so they get the opposite policy.** `useProfile` fetches on
 row open only, caches for six hours, and evicts at 150 entries. It's a latency
 cache, not something we must not lose. Don't unify it with the scout's caching.
