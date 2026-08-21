@@ -997,6 +997,11 @@
   line-height: 1.5;
 }
 
+.field-note a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .wide {
   width: 100%;
   min-height: 50px;
