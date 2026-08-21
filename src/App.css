@@ -357,16 +357,6 @@
   text-align: left;
 }
 
-/* Pressed means the board underneath is already filtered to this player, so
-   the same button now reads "put the board back". A rule down the inside edge
-   rather than a fill: the banner's tint is what tells drain from buy across a
-   noisy room, and a second background would fight it. */
-.nextmove-pick[aria-pressed='true'] {
-  margin-left: -10px;
-  padding-left: 8px;
-  border-left: 2px solid currentColor;
-}
-
 .nextmove-name {
   font-size: 16px;
   font-weight: 600;
