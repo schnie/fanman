@@ -579,6 +579,38 @@
   flex: 0 0 auto;
 }
 
+/* ---- phone widths: the name gets the line to itself ----
+
+   The name is the only item on that line allowed to shrink, so every fixed
+   chip beside it comes out of the name. At 375px the row has ~189px left
+   after the gutter, the avatar and the prices, and the team, the bye chip and
+   the `Mine · $N` badge take ~90px of that — leaving about eleven characters,
+   which is not a name. Trimming gaps and padding reclaims ~35px, still well
+   short of the ~165px "Christian McCaffrey" needs, so no amount of tightening
+   makes one line work on a phone. The chips have to move.
+
+   `flex-basis: 100%` on the name forces the break rather than letting
+   `flex-wrap` break only where it must: wrapping on length alone gives the
+   list two different row shapes, and the board is scanned straight down.
+   Uniform costs ~10px a row and buys a whole name as the first thing the eye
+   lands on.
+
+   Everything after the name keeps its width and simply lands on the second
+   line — including the price badge, the only place the board shows what you
+   paid. Nothing is clipped, because wrapped lines don't overflow. */
+@media (max-width: 460px) {
+  .row-name {
+    flex-wrap: wrap;
+    /* `gap` above sets both axes, and 7px between the two stacked lines reads
+       as a gap in the list rather than as one player. */
+    row-gap: 1px;
+  }
+
+  .row-player {
+    flex: 1 0 100%;
+  }
+}
+
 .injury {
   color: var(--red);
   margin-left: 6px;
@@ -1074,6 +1106,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Same squeeze as the board, same answer — see the note on `.row-name` above.
+   Less severe here, because the roster spends nothing on a rank gutter, but a
+   truncated name is worse on this tab than on that one: this is the list of
+   players you actually own. Kept identical to the board deliberately; the two
+   tabs are read one after the other and a name that changed shape between
+   them would read as a different player. */
+@media (max-width: 460px) {
+  .roster-name {
+    flex-wrap: wrap;
+    row-gap: 1px;
+  }
+
+  .roster-player {
+    flex: 1 0 100%;
+  }
 }
 
 /* An unfilled slot keeps the circle — without it the names either side of a
