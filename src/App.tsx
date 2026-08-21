@@ -295,14 +295,25 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
         </ul>
       </div>
 
-      {tab === 'roster' && (
+      {/* Hidden rather than unmounted, for the same reason as the board above.
+          Now that the roster has faces of its own it holds a slot's worth of
+          <img> elements, and unmounting threw away the decoded pixels every
+          time you left — so the faces re-deferred through `loading="lazy"` and
+          `decoding="async"` on each check of your team.
+
+          Smaller stakes than the board: a roster is `slots` rows, not ~230, and
+          every face on it is one the board already fetched. And it buys nothing
+          on the *first* visit — a lazy image inside `display: none` does not
+          begin loading until the panel is shown. What it buys is every visit
+          after that being a repaint, which on draft day is the common one. */}
+      <div className="roster-panel" hidden={tab !== 'roster'}>
         <Roster
           picks={draft.picks}
           players={players}
           summary={draft.summary}
           slots={draft.state.settings.slots}
         />
-      )}
+      </div>
 
       {tab === 'settings' && (
         <SettingsPane

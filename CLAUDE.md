@@ -107,9 +107,24 @@ we don't have. `NextMove.tsx` owns the wording and none of the judgement, so
 copy edits never touch the tested logic and the tests assert postures rather
 than sentences.
 
+**The board and roster panels are hidden between tabs, not unmounted.** Both
+carry `<img>` avatars, and unmounting threw away elements that had already been
+fetched *and decoded* — a fresh one restarts from nothing, because
+`loading="lazy"` waits for layout to decide it is near the viewport and
+`decoding="async"` defers the paint after that. The service worker made the
+bytes free; it could not make the elements come back. So they render inside
+`.board-panel` / `.roster-panel` with a `hidden` prop, and `App.css` restates
+`display: none` for both because `hidden` is only a UA default that any later
+`display` would outrank — silently stacking the two panels. Settings is
+deliberately still unmounted: no images, nothing to preserve.
+
 **Row lookups in `App.dom.test.tsx` scope to `.board`.** The next-move banner
 names a player too, so a bare `getByText('Some Name')` matches both it and that
-player's row and throws. Go through `findRow`/`getRow`/`queryRow`.
+player's row and throws. Go through `findRow`/`getRow`/`queryRow`. This got
+sharper once the roster stopped unmounting: a won player's name is now in the
+DOM twice on every tab, and `getByText` does not skip `hidden` subtrees the way
+`getByRole` does. Assert *visibility* through roles or the `hidden` attribute —
+never through whether a node exists.
 
 **One modal atom.** `App.tsx` holds a single `sheet` state for "a price sheet is
 open", not one boolean per flow. Two independent modal states meant nothing knew a
