@@ -28,7 +28,7 @@ export function NextMove({ advice, onFind }: {
   if (!pick) {
     return (
       <section className="nextmove nextmove-idle" aria-label="Suggested nomination">
-        <p className="nextmove-why">Nothing left you can bid on — fill the rest at $1.</p>
+        <p className="nextmove-why">Nothing left you can bid on. Fill the rest at $1.</p>
       </section>
     )
   }
@@ -45,7 +45,7 @@ export function NextMove({ advice, onFind }: {
             not a fact about any one team. */}
         <span
           className="nextmove-rival"
-          title="Estimated from the money and roster spots left across the room — an average, not any one team"
+          title="Estimated from the money and roster spots left across the room. An average, not any one team."
         >
           Field ~${advice.rivalMaxBid}
         </span>
@@ -79,7 +79,7 @@ const POSTURE_LABEL: Record<NominationAdvice['reason'], string> = {
 
 function explain(advice: NominationAdvice): string {
   const pick = advice.pick
-  if (!pick) return 'Nothing left you can bid on — fill the rest at $1.'
+  if (!pick) return 'Nothing left you can bid on. Fill the rest at $1.'
   const likely = `Likely goes ~$${pick.expected}.`
 
   switch (advice.reason) {
@@ -90,20 +90,20 @@ function explain(advice: NominationAdvice): string {
       const over = Math.round(pick.premium)
       const lead =
         over >= 1
-          ? `The room is paying $${over} over book here — let someone else spend it.`
+          ? `The room is paying $${over} over book here. Let someone else spend it.`
           : pick.fillsNeed
             ? `Expensive enough to move real money out of the room.`
             : `You don't need him, and he'll move real money.`
       return `${lead} ${likely} If it sticks at $${pick.openAt} you got him $${pick.cushion} under.`
     }
     case 'behind':
-      return `The field can outbid you (~$${advice.rivalMaxBid} vs your $${advice.maxBid}) — every round you wait puts your targets further out. ${likely}`
+      return `The field can outbid you (~$${advice.rivalMaxBid} vs your $${advice.maxBid}), so every round you wait puts your targets further out. ${likely}`
     case 'bargains':
       return `Prices are back to par, so draining now just hands value to whoever still has cash. ${likely} Open at $1.`
     case 'endgame':
       return `Rivals are down to ~$${advice.rivalMaxBid} bids. Open at $1 and he's probably yours.`
     case 'lastSlot':
-      return `One slot left — spend it on someone you actually want. ${likely}`
+      return `One slot left. Spend it on someone you actually want. ${likely}`
     default:
       return likely
   }

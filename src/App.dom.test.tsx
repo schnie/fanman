@@ -809,6 +809,8 @@ describe('next move banner', () => {
     // The most expensive player on the board: a nomination that moves money.
     expect(within(banner).getByText('Player 1')).toBeInTheDocument()
     expect(banner.querySelector('.nextmove-open')?.textContent).toBe('Open$45')
+    // Plain sentences: no em-dashes in the copy.
+    expect(banner.textContent).not.toContain('—')
   })
 
   it('does not claim we lack a need at the opening nomination', async () => {
@@ -844,6 +846,7 @@ describe('next move banner', () => {
     expect(within(banner).getByText('Buy now')).toBeInTheDocument()
     // No reason to bid against ourselves on someone we actually want.
     expect(banner.querySelector('.nextmove-open')?.textContent).toBe('Open$1')
+    expect(banner.textContent).not.toContain('—')
   })
 
   it('drops the suggestion into the search box so the row is one tap away', async () => {
