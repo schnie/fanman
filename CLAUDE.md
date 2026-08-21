@@ -87,6 +87,22 @@ clears were paths to double-billing. Restored reports suppress the pre-warm.
 row open only, caches for six hours, and evicts at 150 entries. It's a latency
 cache, not something we must not lose. Don't unify it with the scout's caching.
 
+**A bye week we didn't fetch is not a bye week of zero.** `Player.byeWeek` is
+optional and every consumer renders `undefined` as silence — the schedule call
+fails independently of the rankings, and a board restored from an older cache
+carries no byes at all. `parseByeWeeks` drops ESPN's `byeWeek: 0` (the
+free-agent bucket) for the same reason. Bye coverage is answered by re-running
+`buildLineup` against the roster minus that week — never by counting positions,
+which gets the superflex OP slot wrong — and holes are the slots the bye takes
+away, so a half-drafted roster doesn't report a catastrophe. The board's clash
+count is scoped to the player's own position (`byeCounts.at`), because only
+players at that position could have covered the slot; a roster-wide count
+flagged every row with a number that meant nothing. Per-player flags ask
+`uncoveredPositions`, never `holes > 0` — the latter is a fact about the week,
+and using it gold-flagged every player off in a week that was short at one
+position. `uncoveredPositions` comes from the empty slot's `accepts` list, so
+the superflex OP slot implicates every position it would have taken.
+
 **Team entities are synthetic.** D/ST and head coaches have negative ids and no
 athlete record behind them. Ask `isTeamEntity(id)` from `data/proTeams.ts` — never
 `position === 'D/ST' || position === 'HC'`. Guard at every layer (fetch refuses,

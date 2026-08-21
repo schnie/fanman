@@ -338,6 +338,202 @@ describe('draft board end to end', () => {
     expect(screen.getByText('10 starting spots still open')).toBeInTheDocument()
   })
 
+  it('shows a bye week on the board and flags one that stacks on ours', async () => {
+    const adapter = new FakeAdapter()
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
+      { ...player(2, 'Bijan Robinson', 2), byeWeek: 5 },
+      { ...player(3, 'Josh Allen', 3, 'QB'), byeWeek: 5 },
+      { ...player(4, 'Ladd McConkey', 4, 'WR') }, // no bye fetched for him
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 2, status: 'mine', price: 30, at: 0 }], // Robinson, RB, week 5
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+
+    // Gibbs is a back sharing a back's week, so the chip carries the count
+    // that makes him a more expensive buy than his price says.
+    const gibbs = getRow('Jahmyr Gibbs').closest('.row')!
+    const chip = gibbs.querySelector('.row-bye')!
+    expect(chip.textContent).toBe('Bye 5+1')
+    expect(chip.className).toContain('clash')
+
+    // Allen shares the same week but plays a position we own nobody at, so
+    // there is nothing to warn about: no back was ever going to cover for a
+    // quarterback. Stated, not flagged.
+    const allen = getRow('Josh Allen').closest('.row')!
+    expect(allen.querySelector('.row-bye')!.textContent).toBe('Bye 5')
+    expect(allen.querySelector('.row-bye')!.className).not.toContain('clash')
+
+    // And an unknown bye says nothing at all rather than inventing a week.
+    expect(getRow('Ladd McConkey').closest('.row')!.querySelector('.row-bye')).toBeNull()
+  })
+
+  it('plans the roster’s bye weeks and marks the ones the bench can’t cover', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
+      { ...player(2, 'Puka Nacua', 2, 'WR'), byeWeek: 5 },
+      { ...player(3, 'Josh Allen', 3, 'QB'), byeWeek: 9 },
+      // Unowned, so the board still has a row to wait on: everyone we've won
+      // is hidden from it by default.
+      { ...player(4, 'Ladd McConkey', 4, 'WR'), byeWeek: 11 },
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 1, status: 'mine', price: 40, at: 0 },
+        { playerId: 2, status: 'mine', price: 30, at: 1 },
+        { playerId: 3, status: 'mine', price: 20, at: 2 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Ladd McConkey')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // Week 5 takes both starters with nobody behind them; week 9 takes one.
+    const weeks = [...document.querySelectorAll('.bye-plan-row')].map((r) => r.textContent)
+    expect(weeks[0]).toContain('Wk 5')
+    // Named, not counted: the slots that go dark say what to go shopping for.
+    expect(weeks[0]).toContain('RB, WR uncovered')
+    expect(weeks[0]).toContain('Jahmyr Gibbs, Puka Nacua')
+    expect(weeks[1]).toContain('Wk 9')
+    expect(weeks[1]).toContain('QB uncovered')
+
+    // The same verdict reaches the player it's about, so you don't have to
+    // hold the week in your head while reading down the lineup.
+    const gibbs = screen.getByText('Jahmyr Gibbs').closest('.roster-row') as HTMLElement
+    expect(within(gibbs).getByText('Bye 5').className).toContain('clash')
+  })
+
+  it('folds the covered bye weeks away until asked for the full story', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // Four backs: three start (RB, RB, OP) and one sits on the bench, which is
+    // what makes week 5 genuinely covered and week 9 genuinely not.
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
+      { ...player(2, 'Bijan Robinson', 2), byeWeek: 9 },
+      { ...player(3, 'Saquon Barkley', 3), byeWeek: 9 },
+      { ...player(4, 'De\'Von Achane', 4), byeWeek: 9 },
+      { ...player(5, 'Ladd McConkey', 5, 'WR') }, // unowned, so the board has a row
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 1, status: 'mine', price: 40, at: 0 },
+        { playerId: 2, status: 'mine', price: 35, at: 1 },
+        { playerId: 3, status: 'mine', price: 30, at: 2 },
+        { playerId: 4, status: 'mine', price: 25, at: 3 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Ladd McConkey')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // Only the week that costs a starting slot. Week 5 is covered, and a
+    // reassuring row above a fifteen-row lineup would push this one off screen.
+    const weeks = () => [...document.querySelectorAll('.bye-plan-row')].map((r) => r.textContent)
+    expect(weeks()).toHaveLength(1)
+    expect(weeks()[0]).toContain('Wk 9')
+
+    const toggle = screen.getByRole('button', { name: /1 covered/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(toggle)
+    expect(weeks()).toHaveLength(2)
+    expect(weeks()[1]).toContain('Wk 5')
+    expect(weeks()[1]).toContain('bench covers')
+
+    // And back again.
+    await user.click(screen.getByRole('button', { name: /Hide covered/ }))
+    expect(weeks()).toHaveLength(1)
+  })
+
+  it('says so plainly when every bye week is covered', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // Four backs for three back-shaped slots, every bye in a different week:
+    // whoever is off, the spare covers, so nothing is ever alerting.
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
+      { ...player(2, 'Bijan Robinson', 2), byeWeek: 9 },
+      { ...player(3, 'Saquon Barkley', 3), byeWeek: 11 },
+      { ...player(4, 'De\'Von Achane', 4), byeWeek: 13 },
+      { ...player(5, 'Ladd McConkey', 5, 'WR') }, // unowned, so the board has a row
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 1, status: 'mine', price: 40, at: 0 },
+        { playerId: 2, status: 'mine', price: 35, at: 1 },
+        { playerId: 3, status: 'mine', price: 30, at: 2 },
+        { playerId: 4, status: 'mine', price: 25, at: 3 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Ladd McConkey')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // A bare heading would read as a section that failed to load.
+    expect(document.querySelectorAll('.bye-plan-row')).toHaveLength(0)
+    expect(screen.getByText('Every bye week is covered.')).toBeInTheDocument()
+
+    // The full story is still there for the asking.
+    await user.click(screen.getByRole('button', { name: /4 covered/ }))
+    expect(document.querySelectorAll('.bye-plan-row')).toHaveLength(4)
+    expect(screen.queryByText('Every bye week is covered.')).not.toBeInTheDocument()
+  })
+
+  it('flags only the position a bye week is actually short at', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // Week 6 takes a back and a receiver. Three more receivers are behind the
+    // one who's out, so only the back's slot goes dark.
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 6 },
+      { ...player(2, 'Puka Nacua', 2, 'WR'), byeWeek: 6 },
+      { ...player(3, 'Ladd McConkey', 3, 'WR'), byeWeek: 11 },
+      { ...player(4, 'Rome Odunze', 4, 'WR'), byeWeek: 11 },
+      { ...player(5, 'Drake London', 5, 'WR'), byeWeek: 11 },
+      { ...player(6, 'Josh Allen', 6, 'QB') }, // unowned, so the board has a row
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 1, status: 'mine', price: 40, at: 0 },
+        { playerId: 2, status: 'mine', price: 30, at: 1 },
+        { playerId: 3, status: 'mine', price: 25, at: 2 },
+        { playerId: 4, status: 'mine', price: 20, at: 3 },
+        { playerId: 5, status: 'mine', price: 15, at: 4 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Josh Allen')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // The headline is about the back, so the line beneath it is too: naming
+    // the covered receiver there reads as though he were half the problem.
+    // Week 11 takes three receivers at once and sorts above this one, so pick
+    // the row by its week rather than by position in the list.
+    const week6 = [...document.querySelectorAll('.bye-plan-row')].find((r) =>
+      r.textContent?.includes('Wk 6'),
+    )!
+    expect(week6.textContent).toContain('RB uncovered')
+    expect(week6.textContent).toContain('Jahmyr Gibbs · +1 covered')
+    expect(week6.textContent).not.toContain('Puka Nacua')
+
+    // Same week, same chip, opposite verdict — because the receiver has three
+    // bodies behind him and the back has none.
+    const gibbs = screen.getByText('Jahmyr Gibbs').closest('.roster-row') as HTMLElement
+    const nacua = screen.getByText('Puka Nacua').closest('.roster-row') as HTMLElement
+    expect(within(gibbs).getByText('Bye 6').className).toContain('clash')
+    expect(within(nacua).getByText('Bye 6').className).not.toContain('clash')
+  })
+
   it('surfaces a scout verdict on the row and its detail when expanded', async () => {
     const user = userEvent.setup()
     const adapter = new FakeAdapter()

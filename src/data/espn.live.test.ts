@@ -40,8 +40,15 @@ live('ESPN live endpoints', () => {
     expect([...wins].sort((a, b) => b - a)).toEqual(wins)
     expect(Math.max(...coaches.map((c) => c.derivedValue!))).toBeLessThanOrEqual(4)
 
+    // --- byes: a separate endpoint, so a separate canary ---
+    const withBye = board.filter((p) => p.byeWeek !== undefined)
+    expect(withBye.length).toBeGreaterThan(board.length * 0.9)
+    expect(withBye.every((p) => p.byeWeek! >= 4 && p.byeWeek! <= 14)).toBe(true)
+    // Coaches ride the same team lookup, so a shape change there shows up here.
+    expect(coaches.every((c) => c.byeWeek !== undefined)).toBe(true)
+
     console.log(
-      ranked.slice(0, 3).map((p) => `${p.rank} ${p.name} $${p.espnValue}/$${p.marketValue}`),
+      ranked.slice(0, 3).map((p) => `${p.rank} ${p.name} $${p.espnValue}/$${p.marketValue} bye ${p.byeWeek}`),
     )
     console.log(
       coaches.slice(0, 3).map((c) => `~$${c.derivedValue} ${c.name} ${c.projectedWins} projW`),

@@ -113,6 +113,49 @@ refresh never empties the board — it keeps the cached data and surfaces the
 staleness. Draft state is entirely local, so a dead network costs you nothing
 but freshness.
 
+### Bye weeks
+
+Every player carries the week their NFL team is off, so you can see before you
+bid whether a $40 back leaves you unable to field a lineup. ESPN publishes the
+bye on the *pro team* rather than the player (`?view=proTeamSchedules_wl` on
+the same host), which is the right shape for us: 32 numbers cover the whole
+board, D/ST and coaches included.
+
+Fetched alongside FPI and allowed to fail on its own — a schedule outage costs
+the board nothing, it just costs the chips. `byeWeek` is optional, and unknown
+renders as *nothing*: a board restored from an older cache genuinely has no
+byes, and an invented week would read as a fact.
+
+On the **board**, the chip sits with the team abbreviation and turns amber when
+you already own someone **at that position** off that week (`Bye 5 +1`) — the
+cost that a player's price doesn't tell you. Position-scoped on purpose: a
+week full of missing receivers says nothing about the quarterback you're
+bidding on, because no receiver was ever going to cover that slot.
+
+On **My team**, a *Bye weeks* block above the lineup lists each week worst
+first, naming the starting slots that go empty — `Wk 5 · RB×2, OP uncovered` —
+or saying the bench covers it. Naming beats counting: it tells you which
+position to go shopping for.
+
+The gold chip on a roster row asks the same question per *player*: it marks
+someone only when the week is short at **their** position. A receiver with
+three bodies behind him is not a problem just because the back beside him is,
+and the names under an alert list the players it's actually about, counting the
+rest as `+1 covered`.
+
+Only the weeks that cost a starting slot show by default; the covered ones fold
+away behind a `3 covered` toggle, and the block says *Every bye week is
+covered* when there's nothing to flag. A bye you can cover is not news, and six
+reassuring rows above a fifteen-row lineup push the problem week off a phone
+screen.
+
+Coverage is answered by re-running the lineup builder against the roster minus
+that week's byes (`src/domain/byes.ts`) rather than counting positions by hand.
+That's what makes it position-aware for free, and it's the only way the
+superflex OP slot stays honest — a spare QB really can cover a missing back
+there. Holes are the slots the bye *takes away*, so a half-drafted team doesn't
+report a catastrophe every week.
+
 ### Head coaches
 
 This league drafts a head coach, which ESPN models as a team entity like D/ST
@@ -282,8 +325,9 @@ Do this the night before, not in the parking lot:
 ## Status
 
 Working: board, search, position and FLEX filters, cross-off, win-with-bid,
-budget math, undo, positional roster with bench divider, head coaches with
-FPI-derived values, settings, persistence, offline fallback, the scout,
-player profiles, and a GitHub Pages deploy.
+budget math, undo, positional roster with bench divider, bye weeks on both
+tabs with bench-coverage warnings, head coaches with FPI-derived values,
+settings, persistence, offline fallback, the scout, player profiles, and a
+GitHub Pages deploy.
 
 Next: rehearse a full mock draft on the phone.

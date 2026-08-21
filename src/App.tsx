@@ -16,6 +16,8 @@ import { useStuck } from './lib/useStuck'
 import { useScrollAnchor } from './lib/useScrollAnchor'
 import { useOnline } from './lib/useOnline'
 import { OP_POSITIONS } from './domain/lineup'
+import { byeCounts } from './domain/byes'
+import { wonPicksFrom } from './domain/budget'
 import { displayRoomPrice, summarizeMarket } from './domain/market'
 import { suggestNomination } from './domain/nomination'
 import type { Player } from './domain/types'
@@ -82,6 +84,16 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
       }),
     [players, draft.picks, draft.summary, draft.state.settings, market],
   )
+
+  /**
+   * How many of our players are off in each week. Computed once for the board
+   * rather than per row: every row needs the same map, and rebuilding it 230
+   * times per pick would be the most expensive thing on the screen.
+   */
+  const ourByes = useMemo(() => {
+    const byId = new Map(players.map((p) => [p.id, p]))
+    return byeCounts(wonPicksFrom(draft.picks), byId)
+  }, [players, draft.picks])
 
   const [tab, setTab] = useState<Tab>('board')
   const [query, setQuery] = useState('')
@@ -310,6 +322,16 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
               // the room's remaining money honest. Skippable in one tap.
               onPrice={openSold}
               room={displayRoomPrice(p, market.inflation)}
+              // Scoped to the player's own position: receivers on bye say
+              // nothing about the quarterback you're bidding on. Our own bye
+              // never clashes with itself, so a player we already own is
+              // discounted out of their own count.
+              byeClash={
+                p.byeWeek === undefined
+                  ? undefined
+                  : ourByes.at(p.position, p.byeWeek) -
+                    (draft.picks.get(p.id)?.status === 'mine' ? 1 : 0)
+              }
               onScout={scout.scoutNow}
               scout={scout.reports.get(p.id)}
               scouting={scout.pending.has(p.id)}

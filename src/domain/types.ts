@@ -58,6 +58,15 @@ export interface Player {
   injuryStatus: string | null
   injured: boolean
   projectedPoints: number
+  /**
+   * The week this player's NFL team is off, from ESPN's schedule view.
+   *
+   * Optional because it can genuinely be unknown — the schedule call fails
+   * independently of the rankings, and a board restored from an older cache
+   * predates the field. Undefined means "we don't know", never "no bye", and
+   * every consumer renders it as silence rather than guessing.
+   */
+  byeWeek?: number
 
   /**
    * Our own estimate, for picks ESPN refuses to price (head coaches).

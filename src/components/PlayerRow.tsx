@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { isUnpriced, marketPremium, marketTrend, observedPrice, type Pick, type Player } from '../domain/types'
 import { posClass } from '../lib/format'
 import { isTeamEntity, teamAbbr } from '../data/proTeams'
+import { ByeChip } from './ByeChip'
 import { PlayerAvatar } from './PlayerAvatar'
 import { ProfileCard } from './ProfileCard'
 import { ScoutChip, ScoutPanel } from './ScoutPanel'
@@ -32,6 +33,13 @@ export interface PlayerRowProps {
    * rows, while this dollar figure is unchanged for most of them.
    */
   room?: number
+  /**
+   * How many players we *already own at this position* share this player's
+   * bye week — the cost of adding one more, not a property of the player.
+   * Passed pre-counted as a number so `memo` still holds: it moves only when
+   * we win someone at the same position off the same week.
+   */
+  byeClash?: number
   scout?: ScoutReport
   scouting: boolean
   scoutError?: string
@@ -64,6 +72,7 @@ export const PlayerRow = memo(function PlayerRow({
   onScout,
   onPrice,
   room,
+  byeClash,
   scout,
   scouting,
   scoutError,
@@ -113,11 +122,22 @@ export const PlayerRow = memo(function PlayerRow({
 
         <span className="row-id">
           <span className="row-name">
-            {player.name}
+            {/* The name is wrapped rather than left as bare text so it can be
+                the thing that truncates. As an anonymous flex item under
+                `nowrap` its minimum size is the full name, so it refused to
+                shrink and pushed the chips after it — including the `Mine · $N`
+                badge, the only place the board shows what you paid — past the
+                clip edge instead. */}
+            <span className="row-player">{player.name}</span>
             {/* Which team someone plays for is half of knowing who they are,
                 and it was the one identifier the row already had in hand and
                 never showed. */}
             {team && <span className="row-team">{team}</span>}
+            {/* Sits with the team, because that's what it is a fact about —
+                and it's the second thing you ask once you know a player is
+                available: not just what they cost, but which week they cost
+                you a starter. */}
+            <ByeChip week={player.byeWeek} position={player.position} clash={byeClash} />
             {player.injured && <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>}
             {/* "Mine" keeps a badge because it carries the price. "Gone" is
                 pure state, so the name is struck through instead. */}

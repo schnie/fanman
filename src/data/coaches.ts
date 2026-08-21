@@ -1,4 +1,5 @@
 import type { Player, TeamStrength } from '../domain/types'
+import type { ByeWeeks } from './byes'
 import { derivedCoachValues } from './fpi'
 
 /**
@@ -61,7 +62,7 @@ const COACHES: { id: number; name: string; proTeamId: number }[] = [
  * team first. Without it they're returned unvalued in team order, which is the
  * graceful-degradation path when FPI is unreachable.
  */
-export function coachPlayers(strength?: Map<number, TeamStrength>): Player[] {
+export function coachPlayers(strength?: Map<number, TeamStrength>, byes?: ByeWeeks): Player[] {
   const values = strength ? derivedCoachValues(strength) : new Map<number, number>()
 
   const players: Player[] = COACHES.map((c) => {
@@ -80,6 +81,9 @@ export function coachPlayers(strength?: Map<number, TeamStrength>): Player[] {
       injuryStatus: null,
       injured: false,
       projectedPoints: 0,
+      // A coach sits out with their franchise, so the bye is the team's — the
+      // same lookup every other player on that team gets.
+      byeWeek: byes?.get(c.proTeamId),
       derivedValue: values.get(c.proTeamId),
       projectedWins: team?.projectedWins,
       fpiRank: team?.fpiRank,

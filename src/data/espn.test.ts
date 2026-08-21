@@ -51,6 +51,19 @@ describe('normalize', () => {
     })
   })
 
+  it('stamps each player with their team\'s bye week', () => {
+    // Gibbs is a Lion (proTeamId 8); the map is keyed by team, not by player.
+    const [p] = normalize([GIBBS], 'PPR', new Map([[8, 6]]))
+    expect(p.byeWeek).toBe(6)
+  })
+
+  it('leaves the bye undefined when the schedule call failed or the team is unknown', () => {
+    // Both halves matter: undefined must mean "we don't know", never "no bye",
+    // so the row can stay silent instead of inventing a week.
+    expect(normalize([GIBBS], 'PPR')[0].byeWeek).toBeUndefined()
+    expect(normalize([BARE], 'PPR', new Map([[8, 6]]))[0].byeWeek).toBeUndefined()
+  })
+
   it('reads the ranking set matching the selected scoring type', () => {
     const ppr = { ...GIBBS, player: { ...GIBBS.player, draftRanksByRankType: {
       STANDARD: { rank: 9, auctionValue: 30 },
