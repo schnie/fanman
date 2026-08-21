@@ -18,8 +18,18 @@ import { isTeamEntity, teamAbbr } from '../data/proTeams'
  *
  * It's a toggle: `finding` says the search box is already showing this pick,
  * and tapping again clears it. App owns that decision because App owns the
- * query; this file only has to render the pressed state, which it does through
- * `aria-pressed` so the affordance is announced rather than only coloured in.
+ * query; this file only reports the state, through `aria-pressed` and the
+ * title.
+ *
+ * Deliberately no *visual* pressed state. It got one at first — a rule down
+ * the inside edge — and it was wrong twice over: `currentColor` on this button
+ * is the near-white body text, so the "subtle" marker was the loudest thing in
+ * the banner, and the negative margin that made room for it slid a
+ * `width: 100%` box left without resizing it, so the opening price crept in
+ * from the right edge every time you tapped. A price that moves is the one
+ * thing this banner cannot afford. Being pressed is already unmissable
+ * elsewhere: the search box holds the name with its own clear button, and the
+ * board below it is down to a single row.
  */
 export function NextMove({ advice, onFind, finding = false }: {
   advice: NominationAdvice

@@ -70,6 +70,36 @@ describe.each(SHEETS)('%s', (file) => {
     })
     expect(clashes).toEqual([])
   })
+
+  it('never pairs a negative side margin with width: 100%', () => {
+    // `width: 100%` resolves against the containing block no matter what the
+    // margins do, so a negative left margin slides the box outward on one side
+    // and pulls its *other* edge in by the same amount. A pressed state on the
+    // next-move banner bled 10px into the padding that way and dragged the
+    // opening price in from the right every time it was tapped — valid CSS, a
+    // green build, and a number that moves under your thumb. Bleed a full-width
+    // box by letting its width resolve automatically instead.
+    const sides = (prop: string, value: string): string[] => {
+      const parts = value.trim().split(/\s+/)
+      if (prop === 'margin-left' || prop === 'margin-right') return parts.slice(0, 1)
+      if (prop !== 'margin') return []
+      // Horizontal components of the shorthand: [all] / [v h] / [t h b] / [t r b l].
+      return parts.length >= 4 ? [parts[1], parts[3]] : parts.length >= 2 ? [parts[1]] : parts
+    }
+
+    const offenders: string[] = []
+    root.walkRules((rule) => {
+      let full = false
+      const negative: string[] = []
+      rule.walkDecls((d) => {
+        if (d.parent !== rule) return
+        if (d.prop === 'width' && d.value.trim() === '100%') full = true
+        if (sides(d.prop, d.value).some((v) => v.startsWith('-'))) negative.push(d.prop)
+      })
+      if (full && negative.length > 0) offenders.push(`${rule.selector} { ${negative.join(', ')} }`)
+    })
+    expect(offenders).toEqual([])
+  })
 })
 
 describe('the position palette actually reaches the chips', () => {
