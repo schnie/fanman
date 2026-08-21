@@ -317,9 +317,12 @@ describe('draft board end to end', () => {
     expect(qb.querySelector('.avatar img')).not.toBeNull()
     expect(within(qb).getByText('ATL')).toBeInTheDocument()
 
+    // The OP slot names what's in it and takes that position's colour, in the
+    // slot column — not as a second chip adrift beside the name.
     const op = screen.getByText('Rome Odunze').closest('.roster-row') as HTMLElement
-    expect(within(op).getByText('OP')).toBeInTheDocument()
-    expect(op.querySelector('.pos-WR')).not.toBeNull()
+    expect(within(op).getByText('OP/WR')).toBeInTheDocument()
+    expect(op.querySelector('.slot')?.className).toContain('slot-WR')
+    expect(op.querySelector('.roster-name .pos')).toBeNull()
 
     // An unfilled slot still holds its place in the avatar column.
     const openRow = screen.getAllByText('Empty')[0].closest('.roster-row')!
