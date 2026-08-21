@@ -290,6 +290,42 @@ describe('draft board end to end', () => {
     expect(within(qbRow as HTMLElement).getByText('$20')).toBeInTheDocument()
   })
 
+  it('carries the board\'s identity cues onto the roster row', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // Three receivers for two WR slots, so the third overflows into OP — the
+    // one slot whose label and the position filling it can disagree.
+    adapter.fetchRankings = async () => [
+      ...ROSTER,
+      player(4, 'Ladd McConkey', 4, 'WR'),
+      player(5, 'Rome Odunze', 5, 'WR'),
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 3, status: 'mine', price: 40, at: 0 }, // Josh Allen  → QB
+        { playerId: 2, status: 'mine', price: 30, at: 1 }, // Puka Nacua  → WR1
+        { playerId: 4, status: 'mine', price: 25, at: 2 }, // McConkey    → WR2
+        { playerId: 5, status: 'mine', price: 20, at: 3 }, // Odunze      → OP
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await screen.findByText('Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    const qb = screen.getByText('Josh Allen').closest('.roster-row') as HTMLElement
+    expect(qb.querySelector('.avatar img')).not.toBeNull()
+    expect(within(qb).getByText('ATL')).toBeInTheDocument()
+
+    const op = screen.getByText('Rome Odunze').closest('.roster-row') as HTMLElement
+    expect(within(op).getByText('OP')).toBeInTheDocument()
+    expect(op.querySelector('.pos-WR')).not.toBeNull()
+
+    // An unfilled slot still holds its place in the avatar column.
+    const openRow = screen.getAllByText('Empty')[0].closest('.roster-row')!
+    expect(openRow.querySelector('.roster-avatar-open')).not.toBeNull()
+  })
+
   it('warns while starting spots are still unfilled', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
@@ -547,6 +583,29 @@ describe('draft board end to end', () => {
       rectSpy.mockRestore()
       vi.unstubAllGlobals()
     }
+  })
+
+  it('keeps the same avatar elements across a trip to another tab', async () => {
+    // Board -> My team -> Board used to destroy every row and rebuild it, so
+    // ~230 already-decoded <img> elements were thrown away and the faces
+    // trickled back in a beat late. Node identity is the whole assertion: the
+    // same element means the browser still holds its decoded pixels, and there
+    // is nothing to fetch, decode or lazily defer on the way back.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    const avatarFor = (name: string) => getRow(name).closest('.row')!.querySelector('img')
+
+    const before = avatarFor('Jahmyr Gibbs')
+    expect(before).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    // Hidden, so it is out of the accessibility tree while the roster is up.
+    expect(screen.queryByRole('button', { name: /Jahmyr Gibbs/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    expect(avatarFor('Jahmyr Gibbs')).toBe(before)
   })
 
   it('marks every row so the scroll anchor can find it again', async () => {
@@ -858,12 +917,15 @@ describe('next move banner', () => {
     expect(screen.getByPlaceholderText('Search players…')).toHaveValue('Player 1')
   })
 
-  it('stays off the roster and settings tabs', async () => {
+  it('goes away with the board on other tabs', async () => {
     const user = userEvent.setup()
     render(<App adapter={new BoardAdapter()} />)
     await findRow('Player 1')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
-    expect(nextMove()).toBeNull()
+    // Hidden with the board panel rather than unmounted: the panel keeps its
+    // rows and their decoded avatars alive across the trip, and the banner
+    // rides along rather than needing a second rule about tabs.
+    expect(nextMove()).not.toBeVisible()
   })
 })

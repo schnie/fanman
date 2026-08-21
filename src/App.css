@@ -397,6 +397,14 @@
 
 /* ---------- board ---------- */
 
+/* The board is hidden, not unmounted, while another tab is up — see App. Said
+   here as well as in the markup because `hidden` is only a UA default: any
+   `display` landing on this class later would quietly outrank it and leave the
+   whole board stacked under the roster. */
+.board-panel[hidden] {
+  display: none;
+}
+
 .board,
 .roster-list {
   list-style: none;
@@ -558,6 +566,12 @@
   text-overflow: ellipsis;
 }
 
+/* The two chip shapes. Both must stay ABOVE the palette below: they set a
+   fallback `color`, and a base rule is exactly as specific as the `.pos-*` /
+   `.slot-*` rule that tints it, so whichever comes last wins. `.slot` used to
+   live down in the roster section, which silently painted every slot chip
+   muted grey — the palette was applied and then overridden, no warning
+   anywhere. `styles.test.ts` pins the ordering now. */
 .pos {
   font-size: 11px;
   font-weight: 700;
@@ -565,6 +579,21 @@
   border-radius: 4px;
   background: var(--surface-2);
   color: var(--muted);
+}
+
+/* Fixed-width slot chips so the position column reads as a straight edge down
+   the roster rather than ragged text. */
+.slot {
+  flex: 0 0 auto;
+  width: 42px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 0;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  letter-spacing: 0.02em;
 }
 
 /* One palette, shared by the board's position chips and the roster's slot
@@ -577,6 +606,13 @@
 .pos-K, .slot-K { color: var(--pos-k); }
 .pos-HC, .slot-HC { color: var(--pos-hc); }
 .slot-OP { color: var(--pos-op); }
+
+/* An empty bench spot is not a position, so it takes no palette colour. */
+.slot-BE {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+}
 
 .tag {
   font-size: 11px;
@@ -825,8 +861,10 @@
 .roster-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 0;
+  gap: 9px;
+  /* Tighter than it looks: the avatar is 34px, so this lands the row on the
+     board's 52px, and the two lists scroll at the same rhythm. */
+  padding: 9px 0;
   border-bottom: 1px solid var(--line);
 }
 
@@ -834,27 +872,6 @@
 .roster-row.open .roster-price {
   opacity: 0.35;
   font-style: italic;
-}
-
-/* Fixed-width slot chips so the position column reads as a straight edge down
-   the roster rather than ragged text. */
-.slot {
-  flex: 0 0 auto;
-  width: 46px;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 0;
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-
-.slot-BE {
-  background: transparent;
-  border: 1px dashed var(--line);
-  color: var(--muted);
 }
 
 /* The starters/bench boundary — deliberately heavier than a row separator. */
@@ -887,8 +904,29 @@
 
 .roster-name {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 15px;
   font-weight: 500;
+}
+
+/* Only the name may truncate. The position chip, team and injury flag beside
+   it are short and load-bearing, so they stay whole and the name gives way. */
+.roster-player {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An unfilled slot keeps the circle — without it the names either side of a
+   hole sit on two different left edges, which is exactly what the avatar
+   column is there to prevent. Dashed, so it reads as a gap, not a person. */
+.roster-avatar-open {
+  background: transparent;
+  border: 1px dashed var(--line);
 }
 
 .roster-price {

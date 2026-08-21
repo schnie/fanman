@@ -234,55 +234,66 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
         )}
       </div>
 
-      {tab === 'board' && (
-        <>
-          {error && (
-            <div className="banner warn">
-              {error}. Showing {fetchedAt ? `cached data from ${describeAge(fetchedAt)}` : 'no data'}.
-              <button onClick={refresh}>Retry</button>
-            </div>
-          )}
-          {/* Above the list, below the stale-data warning: it's the first thing
-              you want between nominations, and it scrolls away once you're
-              hunting a name, which is when it stops being the point. `advice`
-              is null when there is nothing worth the height — the domain makes
-              that call, so there is no second guard here. */}
-          {advice && <NextMove advice={advice} onFind={findPlayer} />}
-          {loading && players.length === 0 && <p className="empty">Loading rankings…</p>}
-          {!loading && visible.length === 0 && players.length > 0 && (
-            <p className="empty">No players match.</p>
-          )}
+      {/* Hidden rather than unmounted when you are on another tab.
 
-          <ul className="board">
-            {visible.map((p) => (
-              <PlayerRow
-                key={p.id}
-                player={p}
-                pick={draft.picks.get(p.id)}
-                expanded={expandedId === p.id}
-                affordable={draft.summary.maxBid >= 1}
-                onToggle={toggleRow}
-                onBid={openBid}
-                onClear={unmark}
-                // Crossing off opens the keypad: the sale price is what keeps
-                // the room's remaining money honest. Skippable in one tap.
-                onPrice={openSold}
-                room={displayRoomPrice(p, market.inflation)}
-                onScout={scout.scoutNow}
-                scout={scout.reports.get(p.id)}
-                scouting={scout.pending.has(p.id)}
-                scoutError={scout.errors.get(p.id)}
-                hasKey={scout.hasKey && online}
-                offline={!online}
-                profile={profile.profiles.get(p.id)}
-                profileLoading={profile.pending.has(p.id)}
-                profileError={profile.errors.get(p.id)}
-                onRetryProfile={profile.retry}
-              />
-            ))}
-          </ul>
-        </>
-      )}
+          Unmounting threw away every row, and with them ~230 <img> elements
+          that had already been fetched and decoded. Coming back built fresh
+          ones: `loading="lazy"` will not even start until the browser has laid
+          the list out and decided what is near the viewport, and `decoding`
+          defers the paint after that — so the faces trickled in a beat late
+          every single time, cache or no cache. The cache was never the
+          problem; the elements holding the decoded pixels were gone.
+
+          Keeping them costs one map over the visible rows when something
+          changes off-tab. The rows themselves are memoised and re-render only
+          when their own props move. */}
+      <div className="board-panel" hidden={tab !== 'board'}>
+        {error && (
+          <div className="banner warn">
+            {error}. Showing {fetchedAt ? `cached data from ${describeAge(fetchedAt)}` : 'no data'}.
+            <button onClick={refresh}>Retry</button>
+          </div>
+        )}
+        {/* Above the list, below the stale-data warning: it's the first thing
+            you want between nominations, and it scrolls away once you're
+            hunting a name, which is when it stops being the point. `advice` is
+            null when there is nothing worth the height — the domain makes that
+            call, so there is no second guard here. */}
+        {advice && <NextMove advice={advice} onFind={findPlayer} />}
+        {loading && players.length === 0 && <p className="empty">Loading rankings…</p>}
+        {!loading && visible.length === 0 && players.length > 0 && (
+          <p className="empty">No players match.</p>
+        )}
+
+        <ul className="board">
+          {visible.map((p) => (
+            <PlayerRow
+              key={p.id}
+              player={p}
+              pick={draft.picks.get(p.id)}
+              expanded={expandedId === p.id}
+              affordable={draft.summary.maxBid >= 1}
+              onToggle={toggleRow}
+              onBid={openBid}
+              onClear={unmark}
+              // Crossing off opens the keypad: the sale price is what keeps
+              // the room's remaining money honest. Skippable in one tap.
+              onPrice={openSold}
+              room={displayRoomPrice(p, market.inflation)}
+              onScout={scout.scoutNow}
+              scout={scout.reports.get(p.id)}
+              scouting={scout.pending.has(p.id)}
+              scoutError={scout.errors.get(p.id)}
+              hasKey={scout.hasKey && online}
+              offline={!online}
+              profile={profile.profiles.get(p.id)}
+              profileLoading={profile.pending.has(p.id)}
+              profileError={profile.errors.get(p.id)}
+              onRetryProfile={profile.retry}
+            />
+          ))}
+        </ul>
+      </div>
 
       {tab === 'roster' && (
         <Roster
