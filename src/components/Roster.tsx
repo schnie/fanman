@@ -69,9 +69,15 @@ function RosterRow({ row, bench }: { row: LineupRow; bench?: boolean }) {
       {/* The face is what makes the board scannable, and the roster is the
           same list of people. An empty slot keeps the circle so the names stay
           on one straight left edge instead of sliding left wherever the lineup
-          still has a hole. */}
+          still has a hole.
+
+          The face loads eagerly, inverting the board's default: this panel is
+          `display: none` most of the time, and a lazy image in a hidden
+          subtree never begins loading. At most `slots` faces, all of them ones
+          the board has already fetched, so they come from the service
+          worker. */}
       {player ? (
-        <PlayerAvatar player={player} />
+        <PlayerAvatar player={player} loading="eager" />
       ) : (
         <span className="avatar roster-avatar-open" aria-hidden="true" />
       )}

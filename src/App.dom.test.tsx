@@ -638,6 +638,32 @@ describe('draft board end to end', () => {
     expect(rosterAvatar()).toBe(before)
   })
 
+  it('loads roster faces eagerly and board faces lazily', async () => {
+    // The two halves of one decision, so they are asserted together. A lazy
+    // image inside `display: none` never starts — it cannot be near the
+    // viewport — so a lazy roster would still pay full price on the first
+    // look at My team, which is exactly what keeping it mounted was meant to
+    // avoid. Eager loads those few faces while the panel is hidden.
+    //
+    // The board must stay lazy: ~230 rows would otherwise fire ~230 requests
+    // on first paint to decorate the handful actually on screen. Flipping the
+    // default to spare the roster a prop would do precisely that.
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 3, status: 'mine', price: 40, at: 0 }], // Josh Allen → QB
+    }
+    const { container } = render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+
+    expect(container.querySelector('.board img')!.getAttribute('loading')).toBe('lazy')
+
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+    const face = screen.getByText('Josh Allen').closest('.roster-row')!.querySelector('img')
+    expect(face!.getAttribute('loading')).toBe('eager')
+  })
+
   it('shows exactly one panel at a time now that both stay mounted', async () => {
     // Both panels live in the DOM permanently, so "which tab am I on" is no
     // longer answered by what exists — it is answered by `hidden`. A missing

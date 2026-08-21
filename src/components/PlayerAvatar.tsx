@@ -15,8 +15,21 @@ import type { Player } from '../domain/types'
  *
  * D/ST and head coaches skip straight to the crest, which is their real
  * portrait anyway; ESPN has no headshot behind their synthetic ids.
+ *
+ * `loading` is a prop because the two call sites want opposite answers. The
+ * board is ~230 rows and must stay lazy. The roster is at most `slots` rows
+ * and sits in a panel that is `display: none` most of the time — and a lazy
+ * image in a hidden subtree never starts, because it can never be near the
+ * viewport, so the first look at My team paid full price for every face.
+ * Eager loads it while hidden instead.
  */
-export function PlayerAvatar({ player }: { player: Player }) {
+export function PlayerAvatar({
+  player,
+  loading = 'lazy',
+}: {
+  player: Player
+  loading?: 'lazy' | 'eager'
+}) {
   const sources = [headshotUrl(player.id), teamLogoUrl(player.proTeamId)].filter(
     (u): u is string => u !== null,
   )
@@ -41,7 +54,7 @@ export function PlayerAvatar({ player }: { player: Player }) {
         alt=""
         width={34}
         height={34}
-        loading="lazy"
+        loading={loading}
         decoding="async"
         // ESPN answers with `access-control-allow-origin: *`, so asking for
         // CORS costs nothing and keeps these out of the service worker as

@@ -118,6 +118,14 @@ bytes free; it could not make the elements come back. So they render inside
 `display` would outrank — silently stacking the two panels. Settings is
 deliberately still unmounted: no images, nothing to preserve.
 
+Mounting is only half of it, and the halves are easy to separate by accident.
+A lazy image in a hidden subtree *never* begins loading — it can never be near
+the viewport — so the roster passes `loading="eager"` to `PlayerAvatar` while
+the board keeps the lazy default. Don't flip that default to save the prop:
+the board is ~230 rows and would fire ~230 requests on first paint to decorate
+the handful on screen. Mounted so the decoded pixels survive the tab switch,
+eager so they exist before the first look.
+
 **Row lookups in `App.dom.test.tsx` scope to `.board`.** The next-move banner
 names a player too, so a bare `getByText('Some Name')` matches both it and that
 player's row and throws. Go through `findRow`/`getRow`/`queryRow`. This got

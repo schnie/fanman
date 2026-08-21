@@ -302,10 +302,13 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           `decoding="async"` on each check of your team.
 
           Smaller stakes than the board: a roster is `slots` rows, not ~230, and
-          every face on it is one the board already fetched. And it buys nothing
-          on the *first* visit — a lazy image inside `display: none` does not
-          begin loading until the panel is shown. What it buys is every visit
-          after that being a repaint, which on draft day is the common one. */}
+          every face on it is one the board already fetched.
+
+          Staying mounted is only half of it. A lazy image inside `display:
+          none` never starts loading, since it can never be near the viewport,
+          so the first visit would still have paid full price — which is why
+          the roster's avatars are eager (see `Roster.tsx`). Mounted so the
+          decoded pixels survive, eager so they exist before you first look. */}
       <div className="roster-panel" hidden={tab !== 'roster'}>
         <Roster
           picks={draft.picks}
