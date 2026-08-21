@@ -150,6 +150,17 @@ DOM twice on every tab, and `getByText` does not skip `hidden` subtrees the way
 `getByRole` does. Assert *visibility* through roles or the `hidden` attribute —
 never through whether a node exists.
 
+**Settings numbers commit values, not keystrokes.** `NumberField` in
+`SettingsPane.tsx` holds its own draft text while focused, and only pushes a
+value up once the text is a whole number inside `[min, max]`; the emptied and
+out-of-range states settle on blur. Clamping every keystroke straight into
+settings — what it used to do — meant the box could never be empty and a first
+digit below the minimum was rewritten before the second one arrived, so `10`
+into Teams became `20`. Keep the mid-typing commit for values that already
+qualify: it means an edit survives a tab switch that never fires a blur, and
+every value it commits on the way is a prefix of the one being typed, so the
+pre-warm dial can only scout a subset of what you are asking for.
+
 **One modal atom.** `App.tsx` holds a single `sheet` state for "a price sheet is
 open", not one boolean per flow. Two independent modal states meant nothing knew a
 modal was open, and the scroll-to-top button silently floated over the second one.

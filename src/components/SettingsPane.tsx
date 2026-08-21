@@ -57,38 +57,32 @@ export function SettingsPane({
 
   return (
     <div className="pane">
-      <label className="field">
-        <span>Budget</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={settings.budget}
-          min={1}
-          onChange={(e) => onChange({ budget: clamp(e.target.value, 1, 10_000, DEFAULT_SETTINGS.budget) })}
-        />
-      </label>
+      <NumberField
+        label="Budget"
+        value={settings.budget}
+        min={1}
+        max={10_000}
+        fallback={DEFAULT_SETTINGS.budget}
+        onCommit={(budget) => onChange({ budget })}
+      />
 
-      <label className="field">
-        <span>Roster slots</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={settings.slots}
-          min={1}
-          onChange={(e) => onChange({ slots: clamp(e.target.value, 1, 40, DEFAULT_SETTINGS.slots) })}
-        />
-      </label>
+      <NumberField
+        label="Roster slots"
+        value={settings.slots}
+        min={1}
+        max={40}
+        fallback={DEFAULT_SETTINGS.slots}
+        onCommit={(slots) => onChange({ slots })}
+      />
 
-      <label className="field">
-        <span>Teams</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={settings.teamCount}
-          min={2}
-          onChange={(e) => onChange({ teamCount: clamp(e.target.value, 2, 32, DEFAULT_SETTINGS.teamCount) })}
-        />
-      </label>
+      <NumberField
+        label="Teams"
+        value={settings.teamCount}
+        min={2}
+        max={32}
+        fallback={DEFAULT_SETTINGS.teamCount}
+        onCommit={(teamCount) => onChange({ teamCount })}
+      />
 
       <label className="field">
         <span>Scoring</span>
@@ -142,17 +136,14 @@ export function SettingsPane({
         </a>.
       </div>
 
-      <label className="field">
-        <span>Auto-scout top N</span>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={settings.prewarmDepth}
-          min={0}
-          max={40}
-          onChange={(e) => onChange({ prewarmDepth: clamp(e.target.value, 0, 40, DEFAULT_SETTINGS.prewarmDepth) })}
-        />
-      </label>
+      <NumberField
+        label="Auto-scout top N"
+        value={settings.prewarmDepth}
+        min={0}
+        max={40}
+        fallback={DEFAULT_SETTINGS.prewarmDepth}
+        onCommit={(prewarmDepth) => onChange({ prewarmDepth })}
+      />
       <div className="field-note">
         Scouts the top N available players in the background so a verdict is
         already waiting when a name is called. Each scout is a paid API call, so
@@ -178,6 +169,79 @@ export function SettingsPane({
         </button>
       )}
     </div>
+  )
+}
+
+/**
+ * A settings number that only reaches the draft once it is a whole, in-range
+ * number.
+ *
+ * These were plain controlled inputs that clamped every keystroke and pushed
+ * the result straight into settings, which made them impossible to *edit*:
+ * select the budget, hit backspace, and the empty string clamped to the default
+ * and reappeared under the cursor before the next digit landed. Typing `10`
+ * into a field with a minimum of 2 became `2`, then `20`. You could append
+ * digits and nothing else.
+ *
+ * So the field keeps its own draft text while you are in it and shows the
+ * committed value the rest of the time. Half-typed states — empty, `1` on the
+ * way to `10`, anything past the maximum — are allowed to exist in the box
+ * without existing in the draft.
+ *
+ * A value that is *already* acceptable still commits on the keystroke rather
+ * than waiting for blur, so an edit can't be lost to a tab switch or a reload
+ * that never fires a blur. That also keeps the pre-warm dial honest: every
+ * value it commits mid-typing is a prefix of the one being typed, so it can
+ * only ever scout a subset of what you are asking for, never a stranger.
+ */
+function NumberField({
+  label,
+  value,
+  min,
+  max,
+  fallback,
+  onCommit,
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  fallback: number
+  onCommit: (n: number) => void
+}) {
+  /** `null` means "not being edited" — the committed value shows through. */
+  const [draft, setDraft] = useState<string | null>(null)
+
+  const change = (raw: string) => {
+    setDraft(raw)
+    const n = parseInt(raw, 10)
+    if (!Number.isNaN(n) && String(n) === raw.trim() && n >= min && n <= max) onCommit(n)
+  }
+
+  const settle = () => {
+    if (draft !== null) onCommit(clamp(draft, min, max, fallback))
+    setDraft(null)
+  }
+
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        value={draft ?? value}
+        min={min}
+        max={max}
+        onChange={(e) => change(e.target.value)}
+        onBlur={settle}
+        /*
+         * A phone keyboard's done key blurs the field; a hardware Enter does
+         * not, and there is no form here to submit to. Without this the number
+         * you typed sits in the box looking committed when it isn't.
+         */
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+      />
+    </label>
   )
 }
 
