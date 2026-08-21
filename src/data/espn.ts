@@ -1,5 +1,6 @@
 import { POSITIONS, type Player, type Scoring } from '../domain/types'
 import { coachPlayers } from './coaches'
+import { fetchByeWeeks, type ByeWeeks } from './byes'
 import { fetchTeamStrength } from './fpi'
 
 export const SEASON = 2026
@@ -19,13 +20,15 @@ export async function fetchRankings(scoring: Scoring, limit = 300): Promise<Play
     },
   }
 
-  // Rankings are load-bearing; FPI only decorates the coaches. Run both at once
-  // but let FPI fail on its own — a power-index outage must not cost us the board.
-  const [rankings, strength] = await Promise.all([
+  // Rankings are load-bearing; FPI only decorates the coaches and the byes only
+  // decorate everyone. Run all three at once but let the two decorations fail on
+  // their own — neither a power-index nor a schedule outage may cost us the board.
+  const [rankings, strength, byes] = await Promise.all([
     fetch(ENDPOINT, {
       headers: { accept: 'application/json', 'x-fantasy-filter': JSON.stringify(filter) },
     }),
     fetchTeamStrength(SEASON).catch(() => undefined),
+    fetchByeWeeks(SEASON).catch(() => undefined),
   ])
 
   if (!rankings.ok) throw new Error(`ESPN responded ${rankings.status}`)
@@ -33,7 +36,7 @@ export async function fetchRankings(scoring: Scoring, limit = 300): Promise<Play
   const body = await rankings.json()
   // Coaches are in no league-default profile, so they're appended rather than
   // fetched. Unranked, they sit below the priced board.
-  return [...normalize(body?.players ?? [], scoring), ...coachPlayers(strength)]
+  return [...normalize(body?.players ?? [], scoring, byes), ...coachPlayers(strength, byes)]
 }
 
 /**
@@ -41,7 +44,7 @@ export async function fetchRankings(scoring: Scoring, limit = 300): Promise<Play
  * routinely have no ownership block and no rank. Missing numerics become 0 so
  * the board can sort without special-casing every field.
  */
-export function normalize(raw: unknown[], scoring: Scoring): Player[] {
+export function normalize(raw: unknown[], scoring: Scoring, byes?: ByeWeeks): Player[] {
   const players: Player[] = []
 
   for (const entry of raw as any[]) {
@@ -68,6 +71,10 @@ export function normalize(raw: unknown[], scoring: Scoring): Player[] {
       injuryStatus: p.injuryStatus ?? null,
       injured: Boolean(p.injured),
       projectedPoints: round1(p.ratings?.['0']?.totalRating ?? 0),
+      // Left undefined when the schedule call failed or the team is unknown:
+      // "we don't know this player's bye" and "this player has no bye" must
+      // not collapse into the same rendering.
+      byeWeek: byes?.get(p.proTeamId ?? 0),
     })
   }
 
