@@ -599,6 +599,44 @@ describe('draft board end to end', () => {
     expect(rescouted).not.toContain(1)
   })
 
+  /**
+   * The failure these are about: the API refuses every call — an empty credit
+   * balance, a rejected key — and the row was left holding a JSON blob with no
+   * button under it. Mid-draft, with the room counting down, the only way back
+   * to a working scout was resetting the whole draft.
+   */
+  it.each([
+    ['no credit', 'billing' as const, 'Out of Claude API credit — add credit at console.anthropic.com, then retry'],
+    ['a rejected key', 'auth' as const, 'API key rejected — check it in Settings, then retry'],
+  ])('offers a retry after %s instead of stranding the row', async (_label, kind, message) => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let broke = true
+    adapter.scoutPlayer = async (p: Player) => {
+      if (broke) throw new ScoutError(message, kind)
+      return makeReport(p.id, { verdict: 'GREEN', headline: 'Nothing new since Tuesday.' })
+    }
+
+    render(<App adapter={adapter} />)
+    await openRow(user, 'Jahmyr Gibbs')
+
+    const panel = () => getRow('Jahmyr Gibbs').closest('.row')!.querySelector('.scout-empty')!
+    await waitFor(() => expect(panel().textContent).toContain(message))
+    expect(panel().textContent).not.toContain('{') // never the raw body
+
+    // Fixed in the other tab — credit added, key corrected. The same row can
+    // just try again; nothing here needed re-mounting or a draft reset.
+    broke = false
+    await user.click(within(panel() as HTMLElement).getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() =>
+      expect(
+        getRow('Jahmyr Gibbs').closest('.row')!.querySelector('.scout-panel')!.textContent,
+      ).toMatch(/Nothing new since Tuesday/),
+    )
+  })
+
   it('points at Settings instead of failing silently when no key is set', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)

@@ -209,8 +209,11 @@ resetting the draft clears them.
 
 The key is entered in Settings and stored on-device; there is no server to hold
 it. Use a dedicated key with a spend cap and revoke it after the draft. A
-missing or rejected key stops the queue rather than repeating the same failure
-across the whole board.
+rejected key or an empty credit balance pauses the background queue rather than
+repeating the same failure across the whole board — but the row keeps its
+**Retry** button, so fixing it in another tab and tapping once picks the draft
+up where it stands. A failure is always shown as a sentence saying what to do
+about it, never as the API's raw response.
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-… npm run test:scout   # real, billed call

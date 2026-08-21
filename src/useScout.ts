@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DataAdapter } from './data/adapter'
-import { isScoutError } from './data/scoutError'
+import { isAccountProblem, isScoutError } from './data/scoutError'
 import { mapRemove, mapSet, setAdd, setRemove } from './lib/collections'
 import type { Pick, Player, ScoutReport } from './domain/types'
 
@@ -42,6 +42,15 @@ export function useScout(
   const [errors, setErrors] = useState<Map<number, string>>(new Map())
   const [calls, setCalls] = useState(0)
   const [hasKey, setHasKey] = useState(false)
+  /**
+   * Set when a failure was about the account rather than the player — a
+   * rejected key, an empty credit balance. It only stops the *pre-warm*, so
+   * the board doesn't spend the next minute reproducing one error a row at a
+   * time. A manual check is always still allowed: this used to be expressed by
+   * clearing `hasKey`, which took the Retry button away with it, and the only
+   * way back was re-saving the key or resetting the draft.
+   */
+  const [paused, setPaused] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
   const queue = useRef<Player[]>([])
@@ -108,18 +117,24 @@ export function useScout(
         setReports((prev) => mapSet(prev, player.id, report))
         setErrors((prev) => mapRemove(prev, player.id))
         setCalls((n) => n + 1)
+        // A call got through, so whatever we paused for is fixed. This is the
+        // only thing that lifts the pause, deliberately: lifting it on the
+        // *request* would let the pre-warm refill behind a manual retry and
+        // pay for the same failure once per row all over again.
+        setPaused(false)
       } catch (err) {
-        const authFailure = isScoutError(err) && err.kind === 'auth'
+        const kind = isScoutError(err) ? err.kind : 'other'
         setErrors((prev) =>
           mapSet(prev, player.id, err instanceof Error ? err.message : 'Scout failed'),
         )
-        // A missing or rejected key fails identically for every player, so stop
-        // rather than working through the board reproducing one error. It also
-        // never reached the API, so it doesn't count against spend.
-        if (authFailure) {
+        // A key the API rejects, or an account with no credit left, fails
+        // identically for every player — so drop the queue rather than work
+        // through the board reproducing one error. Neither was billed, so
+        // neither counts against spend.
+        if (isAccountProblem(kind)) {
           queue.current = []
           queued.current.clear()
-          setHasKey(false)
+          setPaused(true)
         } else {
           setCalls((n) => n + 1)
         }
@@ -154,11 +169,12 @@ export function useScout(
   const scoutNow = useCallback(
     (player: Player) => {
       if (!online) return
+      if (!hasKey) return // nothing to send; the panel offers Settings instead
       if (isDispatched(player.id)) return // already coming; don't pay twice
       setErrors((prev) => mapRemove(prev, player.id))
       enqueue([player], true)
     },
-    [enqueue, isDispatched, online],
+    [enqueue, hasKey, isDispatched, online],
   )
 
   /** Wipe cached reports — wired to the draft reset, which starts a new draft. */
@@ -167,23 +183,27 @@ export function useScout(
     queued.current.clear() // in-flight calls are left to finish and clean up
     setReports(new Map())
     setErrors(new Map())
+    setPaused(false)
     void adapter.saveScoutReports([])
   }, [adapter])
 
   // Keep the top of the available board warm. Runs whenever a pick changes who
   // is at the top, topping the queue up by roughly one player per pick.
   useEffect(() => {
-    if (!hasKey || !loaded || !online || prewarmDepth <= 0) return
+    if (!hasKey || paused || !loaded || !online || prewarmDepth <= 0) return
     const targets = players
       .filter((p) => !picks.has(p.id) && p.rank > 0)
       .slice(0, prewarmDepth)
       .filter((p) => !isFresh(reports.get(p.id)))
     enqueue(targets)
-  }, [hasKey, loaded, online, prewarmDepth, players, picks, reports, enqueue])
+  }, [hasKey, paused, loaded, online, prewarmDepth, players, picks, reports, enqueue])
 
   const refreshKey = useCallback(async () => {
     setHasKey(Boolean(await adapter.loadApiKey()))
+    // A key just changed in Settings, which is the fix for the commonest
+    // pause; let the pre-warm try again rather than making the user tap a row.
+    setPaused(false)
   }, [adapter])
 
-  return { reports, pending, errors, calls, hasKey, scoutNow, refreshKey, clearReports }
+  return { reports, pending, errors, calls, hasKey, paused, scoutNow, refreshKey, clearReports }
 }

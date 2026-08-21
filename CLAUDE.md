@@ -83,6 +83,23 @@ that set needed hand-clearing on a key change and on a manual re-check, and both
 clears were paths to double-billing. Restored reports suppress the pre-warm.
 `Auto-check top N` is a spend dial; 0 disables it.
 
+**A scout failure never removes the way back.** An account-level failure — a
+rejected key, an empty credit balance (`isAccountProblem` in `data/scoutError.ts`)
+— pauses the *pre-warm* only, through `paused` in `useScout`. It used to be
+expressed by clearing `hasKey`, which is also what every Retry and "Scout this
+player" button hangs off, so one failure took manual checking away from the whole
+board and the only ways back were re-saving the key or resetting the draft —
+mid-auction, with the room counting down. Only a *successful* call lifts the
+pause, never the retry request: lifting it on the request lets the pre-warm
+refill behind the in-flight retry and pay for the same failure once per row.
+
+**An error a bidder reads is prose, not a body.** `asScoutError` in `data/scout.ts`
+maps every failure onto a `kind` and a sentence naming the next action, and
+`readableApiMessage` unwraps the SDK's `"400 {…json…}"` message shape — dropping
+anything that still looks like JSON rather than showing it. Billing is matched
+before the status ladder, because an exhausted balance arrives as a plain 400 and
+"bad request" is true, useless, and unactionable.
+
 **Profiles are free, so they get the opposite policy.** `useProfile` fetches on
 row open only, caches for six hours, and evicts at 150 entries. It's a latency
 cache, not something we must not lose. Don't unify it with the scout's caching.

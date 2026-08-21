@@ -194,16 +194,93 @@ function create(client: Anthropic, messages: Anthropic.MessageParam[]) {
   } as Anthropic.MessageCreateParamsNonStreaming)
 }
 
-function asScoutError(err: unknown): ScoutError {
+/**
+ * Pulls the one human sentence out of whatever an API failure carries.
+ *
+ * The SDK builds its `message` as `"400 {…the whole JSON body…}"`, and that
+ * string used to land straight in the row: a wall of braces where a reason
+ * should be, on a phone, mid-bid. Anything that still looks like JSON after
+ * unwrapping is dropped rather than shown — no detail at all beats a detail
+ * made of punctuation, and the kind-specific prose below already says what to
+ * do next.
+ *
+ * Exported for its tests, and used on the generic path too, so an adapter that
+ * hands us a raw body string gets the same treatment.
+ */
+export function readableApiMessage(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const text = raw.trim().replace(/^\d{3}\s+/, '') // the SDK's status prefix
+  if (!text) return ''
+
+  const first = text.indexOf('{')
+  const last = text.lastIndexOf('}')
+  if (first === -1 || last <= first) return cap(text)
+
+  try {
+    const body = JSON.parse(text.slice(first, last + 1)) as {
+      message?: unknown
+      error?: { message?: unknown }
+    }
+    const inner = body?.error?.message ?? body?.message
+    return typeof inner === 'string' ? cap(inner.trim()) : ''
+  } catch {
+    return '' // unparseable braces: still not something to put in front of a bidder
+  }
+}
+
+/** Long enough for a real API sentence, short enough not to bury the retry. */
+function cap(text: string): string {
+  return text.length > 160 ? `${text.slice(0, 159).trimEnd()}…` : text
+}
+
+/**
+ * Maps a thrown thing onto a `kind` and a sentence that says what to do next.
+ *
+ * Every branch names an action, because the panel rendering this also renders
+ * a Retry button: the drafter has one tap and a few seconds to decide whether
+ * this is worth waiting for.
+ *
+ * Exported for its tests — the branches are the whole behaviour.
+ */
+export function asScoutError(err: unknown): ScoutError {
   if (err instanceof ScoutError) return err
-  if (err instanceof Anthropic.AuthenticationError) {
-    return new ScoutError('API key rejected — check it in Settings', 'auth')
-  }
-  if (err instanceof Anthropic.RateLimitError) {
-    return new ScoutError('Rate limited — try again in a moment', 'rate-limit')
-  }
   if (err instanceof Anthropic.APIConnectionError) {
-    return new ScoutError('Could not reach Claude', 'network')
+    return new ScoutError('Could not reach Claude — check the connection, then retry', 'network')
   }
-  return new ScoutError(err instanceof Error ? err.message : 'Scout failed', 'other')
+
+  if (err instanceof Anthropic.APIError) {
+    const body = err.error as { error?: { message?: unknown } } | undefined
+    const detail = readableApiMessage(body?.error?.message) || readableApiMessage(err.message)
+    const status = err.status ?? 0
+
+    // Billing first: an exhausted balance arrives as a plain 400, so a
+    // status-ordered ladder files "you are out of credit" under "bad request"
+    // and tells the drafter nothing they can act on. Match the body type, and
+    // the wording too, in case a gateway in front of it is older than the type.
+    if (err.type === 'billing_error' || /credit balance|billing/i.test(detail)) {
+      return new ScoutError(
+        'Out of Claude API credit — add credit at console.anthropic.com, then retry',
+        'billing',
+      )
+    }
+    if (status === 401 || err.type === 'authentication_error') {
+      return new ScoutError('API key rejected — check it in Settings, then retry', 'auth')
+    }
+    if (status === 403 || err.type === 'permission_error') {
+      return new ScoutError('This API key is not allowed to scout — check it in Settings', 'auth')
+    }
+    if (status === 429 || err.type === 'rate_limit_error') {
+      return new ScoutError('Rate limited — retry in a moment', 'rate-limit')
+    }
+    if (status >= 500 || err.type === 'overloaded_error') {
+      return new ScoutError('Claude is busy right now — retry in a moment', 'other')
+    }
+    return new ScoutError(
+      detail ? `Claude could not run this check: ${detail}` : 'Claude could not run this check',
+      'other',
+    )
+  }
+
+  const message = err instanceof Error ? readableApiMessage(err.message) : ''
+  return new ScoutError(message || 'Scout failed — retry', 'other')
 }
