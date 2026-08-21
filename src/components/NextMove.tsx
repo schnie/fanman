@@ -15,10 +15,16 @@ import { isTeamEntity, teamAbbr } from '../data/proTeams'
  * sheet. A nomination is not a purchase, you still have to watch the room bid,
  * so the useful next action is "put him in front of me" — and it's the one
  * action that is harmless if the suggestion is wrong.
+ *
+ * It's a toggle: `finding` says the search box is already showing this pick,
+ * and tapping again clears it. App owns that decision because App owns the
+ * query; this file only has to render the pressed state, which it does through
+ * `aria-pressed` so the affordance is announced rather than only coloured in.
  */
-export function NextMove({ advice, onFind }: {
+export function NextMove({ advice, onFind, finding = false }: {
   advice: NominationAdvice
   onFind: (player: Player) => void
+  finding?: boolean
 }) {
   // Whether there is anything worth showing at all is the domain's call, not
   // this component's: it hands back `null` for that and an idle advice for a
@@ -52,7 +58,12 @@ export function NextMove({ advice, onFind }: {
         </span>
       </div>
 
-      <button className="nextmove-pick" onClick={() => onFind(player)}>
+      <button
+        className="nextmove-pick"
+        aria-pressed={finding}
+        title={finding ? 'Clear the search' : 'Find him on the board'}
+        onClick={() => onFind(player)}
+      >
         <span className={`pos pos-${posClass(player.position)}`}>{player.position}</span>
         <span className="nextmove-name">
           {player.name}

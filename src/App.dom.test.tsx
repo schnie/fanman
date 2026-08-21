@@ -1024,6 +1024,42 @@ describe('next move banner', () => {
     await user.click(nextMove().querySelector('.nextmove-pick') as HTMLElement)
 
     expect(screen.getByPlaceholderText('Search players…')).toHaveValue('Player 1')
+    expect(nextMove().querySelector('.nextmove-pick')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('tapping the suggestion again puts the whole board back', async () => {
+    // The banner is the only control that fills the search box, so a second
+    // tap can mean "undo that" without guessing. Otherwise the way out is the
+    // ✕ at the far end of the header, one-handed, mid-nomination.
+    const user = userEvent.setup()
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    const pick = () => nextMove().querySelector('.nextmove-pick') as HTMLElement
+    await user.click(pick())
+    expect(queryRow('Player 2')).toBeNull()
+
+    await user.click(pick())
+
+    expect(screen.getByPlaceholderText('Search players…')).toHaveValue('')
+    expect(pick()).toHaveAttribute('aria-pressed', 'false')
+    await findRow('Player 2')
+  })
+
+  it('untoggles a search the user typed by hand, not just one it put there', async () => {
+    // The toggle asks what the search box says, not what it remembers doing —
+    // a remembered flag would leave the button pressed after the ✕, or unable
+    // to clear a name typed the other way round.
+    const user = userEvent.setup()
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    await user.type(screen.getByPlaceholderText('Search players…'), '  player 1  ')
+
+    const pick = nextMove().querySelector('.nextmove-pick') as HTMLElement
+    expect(pick).toHaveAttribute('aria-pressed', 'true')
+    await user.click(pick)
+    expect(screen.getByPlaceholderText('Search players…')).toHaveValue('')
   })
 
   it('goes away with the board on other tabs', async () => {
