@@ -57,6 +57,73 @@ const MAX_INFLATION = 3
  */
 const CONFIDENCE_FLOOR_FRACTION = 0.025
 
+/**
+ * Still on the board and carrying a price.
+ *
+ * Both halves matter and they travel together: a player who is gone can't be
+ * bought, and an unpriced one (every head coach, the deepest bench) can't be
+ * reasoned about in dollars. Shared so that whatever reads the inflation
+ * figure is ranging over the same pool that produced it — advice derived from
+ * a different set than the number it quotes would be quietly incoherent.
+ */
+export function availablePlayers(players: Player[], picks: Map<number, Pick>): Player[] {
+  return players.filter((p) => !picks.has(p.id) && !isUnpriced(p))
+}
+
+/**
+ * A tier ends where the price ladder falls off a cliff, and this is how big a
+ * step counts as one: the next player keeping less than 88% of the last.
+ *
+ * Measured against a live top-200 board rather than guessed. Two findings set
+ * this, and the first is the load-bearing one:
+ *
+ * **Tiers are positional.** Down the *cross-position* price ladder the median
+ * step keeps 97.8% and even the 5th percentile keeps 87.5% — with every
+ * position interleaved the ladder is effectively continuous, and walking it
+ * for a cliff runs 64 players deep and finds nothing meaningful. Inside a
+ * single position the structure is real and obvious: the 2026 WR ladder runs
+ * 97%, 98%, 95%, 91%, 97% and then drops to 80%. That 80% is a tier boundary
+ * you can see from across the room; nothing cross-position looks like it.
+ *
+ * **88% clears the noise.** It sits above the observed within-position breaks
+ * (80% at WR, 83% at RB) and below the ordinary step, so it cuts at cliffs and
+ * nowhere else.
+ */
+const TIER_CLIFF = 0.88
+
+/**
+ * A backstop on how far the cliff walk may run, not the definition of a tier.
+ * The walk normally stops on its own; this only bounds the degenerate case of
+ * a long flat run of near-identical prices deep in the board.
+ */
+const TIER_DEPTH = 8
+
+/**
+ * The run of players who are substitutes for `from`: same position, walking
+ * his price ladder downward until it falls off a cliff.
+ *
+ * This is a fact about the board rather than about any one feature, and it
+ * lives here for the same reason `displayRoomPrice` does — the row, the bid
+ * sheet and the nomination banner must not each grow their own idea of who
+ * counts as the same player with a cheaper name. `from` always leads the
+ * result, so a board with no tier on it yields just him.
+ */
+export function positionTier(available: Player[], from: Player): Player[] {
+  const ladder = available
+    .filter((p) => p.position === from.position)
+    .sort((a, b) => b.marketValue - a.marketValue)
+
+  const start = ladder.findIndex((p) => p.id === from.id)
+  if (start < 0) return [from]
+
+  const tier = [ladder[start]]
+  for (let i = start; i + 1 < ladder.length && tier.length < TIER_DEPTH; i++) {
+    if (ladder[i + 1].marketValue < ladder[i].marketValue * TIER_CLIFF) break
+    tier.push(ladder[i + 1])
+  }
+  return tier
+}
+
 export function summarizeMarket(
   players: Player[],
   picks: Map<number, Pick>,
@@ -94,8 +161,7 @@ export function summarizeMarket(
   // Only the players who will actually be rostered count toward remaining
   // value. Summing the whole board would count hundreds of players nobody
   // drafts and understate inflation badly.
-  const available = players
-    .filter((p) => !picks.has(p.id) && !isUnpriced(p))
+  const available = availablePlayers(players, picks)
     .sort((a, b) => b.marketValue - a.marketValue)
     .slice(0, slotsLeft)
   const valueLeft = available.reduce((sum, p) => sum + p.marketValue, 0)

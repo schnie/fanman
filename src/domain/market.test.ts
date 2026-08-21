@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeMarket, roomPrice, displayRoomPrice, inflationIsMeaningful } from './market'
+import {
+  displayRoomPrice,
+  inflationIsMeaningful,
+  positionTier,
+  roomPrice,
+  summarizeMarket,
+} from './market'
 import { DEFAULT_SETTINGS, observedPrice, type Pick, type Player, type Settings } from './types'
 import { makePlayer } from '../test/factories'
 
@@ -211,5 +217,68 @@ describe('inflationIsMeaningful', () => {
   it('flags a real deviation in either direction', () => {
     expect(inflationIsMeaningful(1.3)).toBe(true)
     expect(inflationIsMeaningful(0.8)).toBe(true)
+  })
+})
+
+describe('positionTier', () => {
+  /** The live 2026 WR board, market and book values as ESPN published them. */
+  const WR_LADDER: [string, number][] = [
+    ["Ja'Marr Chase", 58.48],
+    ['Puka Nacua', 56.8],
+    ['Jaxon Smith-Njigba', 55.39],
+    ['Amon-Ra St. Brown', 52.57],
+    ['CeeDee Lamb', 47.99],
+    ['Justin Jefferson', 46.77],
+    ['Drake London', 37.38],
+    ['Rashee Rice', 33.35],
+  ]
+  const wrs = WR_LADDER.map(([name, marketValue], i) =>
+    makePlayer({ id: i + 1, name, position: 'WR', marketValue, espnValue: marketValue }),
+  )
+
+  it('stops at the cliff in a real ladder', () => {
+    // Steps run 97%, 97%, 95%, 91%, 97% and then fall to 80% at London. Six
+    // names, and the boundary is where the board itself puts it.
+    const tier = positionTier(wrs, wrs[0])
+    expect(tier.map((p) => p.name)).toEqual([
+      "Ja'Marr Chase",
+      'Puka Nacua',
+      'Jaxon Smith-Njigba',
+      'Amon-Ra St. Brown',
+      'CeeDee Lamb',
+      'Justin Jefferson',
+    ])
+  })
+
+  it('starts from the player asked about, not the top of the board', () => {
+    // Below the cliff is its own tier: London and Rice keep 89% of each other.
+    expect(positionTier(wrs, wrs[6]).map((p) => p.name)).toEqual(['Drake London', 'Rashee Rice'])
+  })
+
+  it('ignores other positions entirely', () => {
+    // A cross-position ladder is effectively continuous, so a tier that let RBs
+    // in would never find a boundary. The RB here sits mid-WR-tier by price.
+    const rb = makePlayer({ id: 99, position: 'RB', marketValue: 50, espnValue: 50 })
+    expect(positionTier([...wrs, rb], wrs[0])).not.toContain(rb)
+  })
+
+  it('yields just the player when nothing is close enough to be a substitute', () => {
+    const alone = makePlayer({ id: 1, position: 'TE', marketValue: 40, espnValue: 40 })
+    const far = makePlayer({ id: 2, position: 'TE', marketValue: 10, espnValue: 10 })
+    expect(positionTier([alone, far], alone)).toEqual([alone])
+  })
+
+  it('leads with the player even when he is not on the board', () => {
+    // A player already crossed off is not in `available`; asking anyway must
+    // not return an empty tier the caller would have to special-case.
+    const gone = makePlayer({ id: 500, position: 'WR', marketValue: 60, espnValue: 60 })
+    expect(positionTier(wrs, gone)).toEqual([gone])
+  })
+
+  it('caps a long flat run rather than walking the whole board', () => {
+    const flat = Array.from({ length: 40 }, (_, i) =>
+      makePlayer({ id: i + 1, position: 'QB', marketValue: 30 - i * 0.1, espnValue: 30 }),
+    )
+    expect(positionTier(flat, flat[0])).toHaveLength(8)
   })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { BID_PROMPT } from './components/BidSheet'
@@ -72,8 +72,24 @@ class FakeAdapter implements DataAdapter {
 const bar = () => screen.getByText('Max bid').closest('.budget-bar') as HTMLElement
 const maxBid = () => within(bar()).getByText(/^\$|—/, { selector: '.budget-max-value' }).textContent
 
+/**
+ * The next-move banner names a player too, so a bare `getByText('Some Name')`
+ * matches both it and that player's row. Anything looking for a *row* goes
+ * through these and scopes to the board list.
+ */
+function board(): HTMLElement {
+  // App renders "Loading draft…" before the list exists, so this is genuinely
+  // absent early. Throwing beats `within(null)`, whose TypeError says nothing.
+  const list = document.querySelector('.board')
+  if (!list) throw new Error('board not rendered yet')
+  return list as HTMLElement
+}
+const findRow = (name: string) => waitFor(() => within(board()).getByText(name))
+const getRow = (name: string) => within(board()).getByText(name)
+const queryRow = (name: string) => within(board()).queryByText(name)
+
 async function openRow(user: ReturnType<typeof userEvent.setup>, name: string) {
-  await user.click(await screen.findByText(name))
+  await user.click(await findRow(name))
 }
 
 /** Cross a player off. Passing a price records it; omitting it skips. */
@@ -95,7 +111,7 @@ async function crossOff(
 describe('draft board end to end', () => {
   it('shows the opening max bid once rankings load', async () => {
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     expect(maxBid()).toBe('$186') // 200 - 14
   })
 
@@ -123,7 +139,7 @@ describe('draft board end to end', () => {
     await crossOff(user, 'Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'Hide taken' })) // show it again
 
-    const row = (await screen.findByText('Jahmyr Gibbs')).closest('.row')!
+    const row = (await findRow('Jahmyr Gibbs')).closest('.row')!
     expect(row).toHaveClass('gone')
     // The badge row is for things that describe the player; state is not one.
     expect(within(row as HTMLElement).queryByText('Gone')).not.toBeInTheDocument()
@@ -185,7 +201,7 @@ describe('draft board end to end', () => {
     }
 
     render(<App adapter={adapter} />)
-    await screen.findByText('Puka Nacua')
+    await findRow('Puka Nacua')
     expect(maxBid()).toBe('$129')
   })
 
@@ -210,7 +226,7 @@ describe('draft board end to end', () => {
     render(<App adapter={adapter} />)
 
     // Cached players still render, and the failure is surfaced rather than silent.
-    expect(await screen.findByText('Jahmyr Gibbs')).toBeInTheDocument()
+    expect(await findRow('Jahmyr Gibbs')).toBeInTheDocument()
     expect(await screen.findByText(/offline/)).toBeInTheDocument()
     expect(maxBid()).toBe('$186')
   })
@@ -221,7 +237,7 @@ describe('draft board end to end', () => {
     // stay in one container — otherwise the controls would have to hard-code
     // the header's height, which varies with wrapping and the compact state.
     const { container } = render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     const head = container.querySelector('.sticky-head')
     expect(head).not.toBeNull()
@@ -236,7 +252,7 @@ describe('draft board end to end', () => {
   it('drops the board controls on other tabs but keeps the budget bar pinned', async () => {
     const user = userEvent.setup()
     const { container } = render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     await user.click(screen.getByRole('button', { name: 'My team' }))
     const head = container.querySelector('.sticky-head')!
@@ -247,7 +263,7 @@ describe('draft board end to end', () => {
   it('lays the roster out in positional order with a bench divider', async () => {
     const user = userEvent.setup()
     const { container } = render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
     const slots = [...container.querySelectorAll('.slot')].map((el) => el.textContent)
@@ -266,7 +282,7 @@ describe('draft board end to end', () => {
       log: [{ playerId: 3, status: 'mine', price: 20, at: 0 }], // Josh Allen, QB
     }
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
     const qbRow = screen.getByText('Josh Allen').closest('.roster-row')!
@@ -313,7 +329,7 @@ describe('draft board end to end', () => {
   it('warns while starting spots are still unfilled', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
     expect(screen.getByText('10 starting spots still open')).toBeInTheDocument()
@@ -336,17 +352,16 @@ describe('draft board end to end', () => {
       })
 
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     // Pre-warmed in the background — no tap required.
     expect(await screen.findAllByText('Risk')).not.toHaveLength(0)
 
-    await user.click(screen.getByText('Jahmyr Gibbs'))
+    await user.click(getRow('Jahmyr Gibbs'))
 
     // Scoped to this row's panel: the fake gives every player the same
     // headline, so a global query would also match the other rows' inline copy.
-    const panel = screen
-      .getByText('Jahmyr Gibbs')
+    const panel = getRow('Jahmyr Gibbs')
       .closest('.row')!
       .querySelector('.scout-panel') as HTMLElement
     expect(within(panel).getByText(/Ruled out for Week 1/)).toBeInTheDocument()
@@ -372,10 +387,10 @@ describe('draft board end to end', () => {
 
     // A reload is a fresh mount against the same storage.
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     expect(await screen.findByText('Caution')).toBeInTheDocument()
-    await user.click(screen.getByText('Jahmyr Gibbs'))
+    await user.click(getRow('Jahmyr Gibbs'))
     expect(screen.getByText('Limited in practice Wednesday.')).toBeInTheDocument()
     expect(screen.getByText(/^Scouted /)).toBeInTheDocument()
 
@@ -387,7 +402,7 @@ describe('draft board end to end', () => {
   it('points at Settings instead of failing silently when no key is set', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await user.click(await screen.findByText('Jahmyr Gibbs'))
+    await user.click(await findRow('Jahmyr Gibbs'))
 
     expect(screen.getByText(/Add an API key in Settings to scout players/)).toBeInTheDocument()
   })
@@ -401,7 +416,7 @@ describe('draft board end to end', () => {
     }
 
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await new Promise((r) => setTimeout(r, 20))
 
     expect(calls).toBe(0)
@@ -410,16 +425,16 @@ describe('draft board end to end', () => {
   it('clears the search from the inset button and keeps focus', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     const search = screen.getByPlaceholderText('Search players…')
     await user.type(search, 'Nacua')
-    expect(screen.queryByText('Jahmyr Gibbs')).not.toBeInTheDocument()
+    expect(queryRow('Jahmyr Gibbs')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Clear search' }))
 
     expect(search).toHaveValue('')
-    expect(await screen.findByText('Jahmyr Gibbs')).toBeInTheDocument()
+    expect(await findRow('Jahmyr Gibbs')).toBeInTheDocument()
     // Clearing is nearly always a prelude to typing the next name.
     expect(search).toHaveFocus()
   })
@@ -427,7 +442,7 @@ describe('draft board end to end', () => {
   it('shows the clear button only when there is something to clear', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
 
@@ -443,10 +458,10 @@ describe('draft board end to end', () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     try {
       render(<App adapter={adapter} />)
-      await screen.findByText('Jahmyr Gibbs')
+      await findRow('Jahmyr Gibbs')
 
       expect(screen.getByText('Offline')).toBeInTheDocument()
-      await user.click(screen.getByText('Jahmyr Gibbs'))
+      await user.click(getRow('Jahmyr Gibbs'))
       expect(screen.getByText(/Offline — scouting needs a connection/)).toBeInTheDocument()
     } finally {
       online.mockRestore()
@@ -455,7 +470,7 @@ describe('draft board end to end', () => {
 
   it('shows no offline marker when connected', async () => {
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     expect(screen.queryByText('Offline')).not.toBeInTheDocument()
   })
 
@@ -465,15 +480,15 @@ describe('draft board end to end', () => {
     adapter.apiKey = 'sk-ant-test'
     adapter.scoutReports = [makeReport(1, { headline: 'Limited in practice Wednesday.' })]
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     // Collapsed: readable at a glance, without a tap.
     expect(await screen.findByText('Limited in practice Wednesday.')).toBeInTheDocument()
 
-    const row = screen.getByText('Jahmyr Gibbs').closest('.row') as HTMLElement
+    const row = getRow('Jahmyr Gibbs').closest('.row') as HTMLElement
     expect(within(row).getByText('Clear')).toBeInTheDocument() // verdict chip
 
-    await user.click(screen.getByText('Jahmyr Gibbs'))
+    await user.click(getRow('Jahmyr Gibbs'))
 
     // Expanded: the panel carries both, so the row line must not repeat either.
     expect(screen.getAllByText('Limited in practice Wednesday.')).toHaveLength(1)
@@ -519,7 +534,7 @@ describe('draft board end to end', () => {
       log: [{ playerId: 1, status: 'gone', price: 0, at: 0 }],
     }
     render(<App adapter={adapter} />)
-    await screen.findByText('Puka Nacua')
+    await findRow('Puka Nacua')
     await openRow(user, 'Puka Nacua')
     await user.click(screen.getByRole('button', { name: 'Gone' }))
     for (const d of ['9', '9']) await user.click(screen.getByRole('button', { name: d }))
@@ -554,7 +569,7 @@ describe('draft board end to end', () => {
     try {
       const user = userEvent.setup()
       render(<App adapter={new FakeAdapter()} />)
-      await screen.findByText('Jahmyr Gibbs')
+      await findRow('Jahmyr Gibbs')
 
       await openRow(user, 'Jahmyr Gibbs')
       scrollBy.mockClear()
@@ -578,10 +593,9 @@ describe('draft board end to end', () => {
     // is nothing to fetch, decode or lazily defer on the way back.
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
-    const avatarFor = (name: string) =>
-      screen.getByText(name).closest('.row')!.querySelector('img')
+    const avatarFor = (name: string) => getRow(name).closest('.row')!.querySelector('img')
 
     const before = avatarFor('Jahmyr Gibbs')
     expect(before).not.toBeNull()
@@ -599,7 +613,7 @@ describe('draft board end to end', () => {
     // accordion has moved. Drop it and the hook degrades silently: no error,
     // no test failure anywhere else, just the jump coming back on a phone.
     render(<App adapter={new FakeAdapter()} />)
-    const gibbs = await screen.findByText('Jahmyr Gibbs')
+    const gibbs = await findRow('Jahmyr Gibbs')
 
     const row = gibbs.closest('.row')!
     expect(row.getAttribute('data-row-anchor')).toBe('1')
@@ -609,11 +623,11 @@ describe('draft board end to end', () => {
   it('filters the board by position', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     await user.click(screen.getByRole('button', { name: 'QB' }))
-    expect(screen.getByText('Josh Allen')).toBeInTheDocument()
-    expect(screen.queryByText('Jahmyr Gibbs')).not.toBeInTheDocument()
+    expect(getRow('Josh Allen')).toBeInTheDocument()
+    expect(queryRow('Jahmyr Gibbs')).not.toBeInTheDocument()
   })
 })
 
@@ -638,7 +652,7 @@ describe('player profiles', () => {
     // Tier 1: the row already knows the pro team id, so this costs nothing.
     const adapter = new ProfileAdapter()
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
 
     expect(screen.getAllByText('ATL').length).toBeGreaterThan(0)
     expect(adapter.fetched).toEqual([])
@@ -647,7 +661,7 @@ describe('player profiles', () => {
   it('suppresses the team abbreviation for D/ST and coaches', async () => {
     // "Texans D/ST · HOU" says the same thing twice; the crest carries it.
     render(<App adapter={new ProfileAdapter()} />)
-    const row = (await screen.findByText('Texans D/ST')).closest('.row') as HTMLElement
+    const row = (await findRow('Texans D/ST')).closest('.row') as HTMLElement
     expect(row.querySelector('.row-team')).toBeNull()
   })
 
@@ -655,7 +669,7 @@ describe('player profiles', () => {
     const user = userEvent.setup()
     const adapter = new ProfileAdapter()
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     expect(adapter.fetched).toEqual([])
 
     await openRow(user, 'Jahmyr Gibbs')
@@ -675,7 +689,7 @@ describe('player profiles', () => {
     const adapter = new ProfileAdapter()
     adapter.apiKey = null
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
 
     expect(await screen.findByText('Detroit Lions · #0')).toBeInTheDocument()
@@ -687,7 +701,7 @@ describe('player profiles', () => {
     const user = userEvent.setup()
     const adapter = new ProfileAdapter()
     render(<App adapter={adapter} />)
-    await screen.findByText('Texans D/ST')
+    await findRow('Texans D/ST')
 
     await openRow(user, 'Texans D/ST')
     expect(screen.getByText('Houston Texans')).toBeInTheDocument()
@@ -703,7 +717,7 @@ describe('player profiles', () => {
     const adapter = new ProfileAdapter()
     adapter.profiles = [makeProfile(1, { college: 'Cached U' })]
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
 
     expect(await screen.findByText(/Cached U/)).toBeInTheDocument()
@@ -715,7 +729,7 @@ describe('player profiles', () => {
     const adapter = new ProfileAdapter()
     adapter.profiles = [makeProfile(1, { college: 'Cached U', fetchedAt: 1 })]
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
 
     expect(await screen.findByText(/Alabama/)).toBeInTheDocument()
@@ -736,7 +750,7 @@ describe('player profiles', () => {
       })
 
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
 
     // Standing in for the card, in the card's own box rather than one line.
@@ -762,7 +776,7 @@ describe('player profiles', () => {
     // reserving the box anyway would leave a hole under the team name.
     const user = userEvent.setup()
     render(<App adapter={new ProfileAdapter()} />)
-    await screen.findByText('Texans D/ST')
+    await findRow('Texans D/ST')
     await openRow(user, 'Texans D/ST')
 
     expect(document.querySelector('.profile-slot-bare')).not.toBeNull()
@@ -778,7 +792,7 @@ describe('player profiles', () => {
       return makeProfile(playerId)
     }
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
 
     expect(await screen.findByText('ESPN is unreachable')).toBeInTheDocument()
@@ -796,7 +810,7 @@ describe('player profiles', () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     try {
       render(<App adapter={adapter} />)
-      await screen.findByText('Jahmyr Gibbs')
+      await findRow('Jahmyr Gibbs')
       await openRow(user, 'Jahmyr Gibbs')
 
       expect(screen.getByText('Offline — profile unavailable.')).toBeInTheDocument()
@@ -810,10 +824,108 @@ describe('player profiles', () => {
     const user = userEvent.setup()
     const adapter = new ProfileAdapter()
     render(<App adapter={adapter} />)
-    await screen.findByText('Jahmyr Gibbs')
+    await findRow('Jahmyr Gibbs')
     await openRow(user, 'Jahmyr Gibbs')
     await screen.findByText('Detroit Lions · #0')
 
     expect(adapter.profiles.map((p) => p.playerId)).toEqual([1])
+  })
+})
+
+/**
+ * A board big enough for the market model to behave like a real one. Three
+ * players cannot fill twelve rosters, so on the small fixture inflation pins
+ * to its clamp and every suggestion collapses to the same answer.
+ */
+const BIG_BOARD = Array.from({ length: 200 }, (_, i) =>
+  makePlayer({
+    id: i + 1,
+    name: `Player ${i + 1}`,
+    position: ['RB', 'WR', 'QB', 'TE'][i % 4],
+    rank: i + 1,
+    marketValue: Math.max(1, 60 - i),
+    espnValue: Math.max(1, 60 - i),
+  }),
+)
+
+class BoardAdapter extends FakeAdapter {
+  async fetchRankings() {
+    return BIG_BOARD
+  }
+}
+
+const nextMove = () => document.querySelector('.nextmove') as HTMLElement
+
+describe('next move banner', () => {
+  it('opens the draft telling you to drain the room, with a price to open at', async () => {
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    const banner = nextMove()
+    expect(banner).toHaveClass('nextmove-drain')
+    expect(within(banner).getByText('Drain the room')).toBeInTheDocument()
+    // The most expensive player on the board: a nomination that moves money.
+    expect(within(banner).getByText('Player 1')).toBeInTheDocument()
+    expect(banner.querySelector('.nextmove-open')?.textContent).toBe('Open$45')
+    // Plain sentences: no em-dashes in the copy.
+    expect(banner.textContent).not.toContain('—')
+  })
+
+  it('does not claim we lack a need at the opening nomination', async () => {
+    // Every slot is still open at this point, so "you don't need him" would be
+    // a lie. The case for draining has to rest on the price instead.
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    const why = nextMove().querySelector('.nextmove-why')!.textContent!
+    expect(why).not.toMatch(/don't need/)
+    expect(why).toContain('$45')
+  })
+
+  it('shows what the rest of the room can still bid', async () => {
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    // Twelve untouched teams, so the field's ceiling is our own.
+    expect(within(nextMove()).getByText('Field ~$186')).toBeInTheDocument()
+  })
+
+  it('flips to buying once the field can outbid us', async () => {
+    const adapter = new BoardAdapter()
+    adapter.draft = {
+      settings: { budget: 200, slots: 15, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [{ playerId: 1, status: 'mine', price: 150, at: 0 }],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Player 2')
+
+    const banner = nextMove()
+    expect(banner).toHaveClass('nextmove-buy')
+    expect(within(banner).getByText('Buy now')).toBeInTheDocument()
+    // No reason to bid against ourselves on someone we actually want.
+    expect(banner.querySelector('.nextmove-open')?.textContent).toBe('Open$1')
+    expect(banner.textContent).not.toContain('—')
+  })
+
+  it('drops the suggestion into the search box so the row is one tap away', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+
+    await user.click(nextMove().querySelector('.nextmove-pick') as HTMLElement)
+
+    expect(screen.getByPlaceholderText('Search players…')).toHaveValue('Player 1')
+  })
+
+  it('goes away with the board on other tabs', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new BoardAdapter()} />)
+    await findRow('Player 1')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // Hidden with the board panel rather than unmounted: the panel keeps its
+    // rows and their decoded avatars alive across the trip, and the banner
+    // rides along rather than needing a second rule about tabs.
+    expect(nextMove()).not.toBeVisible()
   })
 })
