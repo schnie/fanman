@@ -485,6 +485,52 @@ describe('draft board end to end', () => {
     expect(screen.queryByText('Every bye week is covered.')).not.toBeInTheDocument()
   })
 
+  it('flags only the position a bye week is actually short at', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // Week 6 takes a back and a receiver. Three more receivers are behind the
+    // one who's out, so only the back's slot goes dark.
+    adapter.fetchRankings = async () => [
+      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 6 },
+      { ...player(2, 'Puka Nacua', 2, 'WR'), byeWeek: 6 },
+      { ...player(3, 'Ladd McConkey', 3, 'WR'), byeWeek: 11 },
+      { ...player(4, 'Rome Odunze', 4, 'WR'), byeWeek: 11 },
+      { ...player(5, 'Drake London', 5, 'WR'), byeWeek: 11 },
+      { ...player(6, 'Josh Allen', 6, 'QB') }, // unowned, so the board has a row
+    ]
+    adapter.draft = {
+      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
+      log: [
+        { playerId: 1, status: 'mine', price: 40, at: 0 },
+        { playerId: 2, status: 'mine', price: 30, at: 1 },
+        { playerId: 3, status: 'mine', price: 25, at: 2 },
+        { playerId: 4, status: 'mine', price: 20, at: 3 },
+        { playerId: 5, status: 'mine', price: 15, at: 4 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Josh Allen')
+    await user.click(screen.getByRole('button', { name: 'My team' }))
+
+    // The headline is about the back, so the line beneath it is too: naming
+    // the covered receiver there reads as though he were half the problem.
+    // Week 11 takes three receivers at once and sorts above this one, so pick
+    // the row by its week rather than by position in the list.
+    const week6 = [...document.querySelectorAll('.bye-plan-row')].find((r) =>
+      r.textContent?.includes('Wk 6'),
+    )!
+    expect(week6.textContent).toContain('RB uncovered')
+    expect(week6.textContent).toContain('Jahmyr Gibbs · +1 covered')
+    expect(week6.textContent).not.toContain('Puka Nacua')
+
+    // Same week, same chip, opposite verdict — because the receiver has three
+    // bodies behind him and the back has none.
+    const gibbs = screen.getByText('Jahmyr Gibbs').closest('.roster-row') as HTMLElement
+    const nacua = screen.getByText('Puka Nacua').closest('.roster-row') as HTMLElement
+    expect(within(gibbs).getByText('Bye 6').className).toContain('clash')
+    expect(within(nacua).getByText('Bye 6').className).not.toContain('clash')
+  })
+
   it('surfaces a scout verdict on the row and its detail when expanded', async () => {
     const user = userEvent.setup()
     const adapter = new FakeAdapter()

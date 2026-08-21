@@ -1,4 +1,4 @@
-import { buildLineup } from './lineup'
+import { buildLineup, STARTER_SLOTS } from './lineup'
 import type { Pick, Player } from './types'
 
 /** What one bye week costs us: who's out, and whether we can still field a team. */
@@ -15,6 +15,17 @@ export interface ByeWeekLoad {
    * bare count only says something is wrong.
    */
   uncovered: string[]
+  /**
+   * The positions that could have filled one of those slots — `['RB']` when a
+   * back's slot goes dark, and every skill position when it's the OP slot,
+   * which takes any of them.
+   *
+   * This is what a per-player flag must be asked, not `holes > 0`. A week can
+   * be short at back and perfectly fine at receiver, and flagging every player
+   * off that week tells a receiver with three bodies behind him that he's a
+   * problem.
+   */
+  uncoveredPositions: string[]
   /**
    * `uncovered.length`, kept as its own field because it's what the wording
    * and the flagging branch on and re-deriving a length at three call sites
@@ -66,9 +77,17 @@ export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number):
     const filledThatWeek = new Set(
       weekLineup.starters.filter((row) => row.pick).map((row) => row.key),
     )
-    const uncovered = base.starters
-      .filter((row) => row.pick && !filledThatWeek.has(row.key))
-      .map((row) => row.label)
+    const lost = base.starters.filter((row) => row.pick && !filledThatWeek.has(row.key))
+
+    // Who could have stood in. Taken from the slot's own `accepts` list rather
+    // than from its label, so the OP slot implicates every position it takes
+    // instead of only the one whose name is on the chip.
+    const positions = new Set<string>()
+    for (const row of lost) {
+      for (const position of STARTER_SLOTS.find((def) => def.id === row.key)?.accepts ?? []) {
+        positions.add(position)
+      }
+    }
 
     loads.push({
       week,
@@ -77,8 +96,9 @@ export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number):
         .map((pick) => byId.get(pick.playerId))
         .filter((p): p is Player => Boolean(p)),
       starters: out.filter((pick) => startingIds.has(pick.playerId)).length,
-      uncovered,
-      holes: uncovered.length,
+      uncovered: lost.map((row) => row.label),
+      uncoveredPositions: [...positions],
+      holes: lost.length,
     })
   }
 

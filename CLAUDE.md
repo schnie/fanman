@@ -97,7 +97,11 @@ which gets the superflex OP slot wrong — and holes are the slots the bye takes
 away, so a half-drafted roster doesn't report a catastrophe. The board's clash
 count is scoped to the player's own position (`byeCounts.at`), because only
 players at that position could have covered the slot; a roster-wide count
-flagged every row with a number that meant nothing.
+flagged every row with a number that meant nothing. Per-player flags ask
+`uncoveredPositions`, never `holes > 0` — the latter is a fact about the week,
+and using it gold-flagged every player off in a week that was short at one
+position. `uncoveredPositions` comes from the empty slot's `accepts` list, so
+the superflex OP slot implicates every position it would have taken.
 
 **Team entities are synthetic.** D/ST and head coaches have negative ids and no
 athlete record behind them. Ask `isTeamEntity(id)` from `data/proTeams.ts` — never

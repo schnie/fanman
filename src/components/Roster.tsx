@@ -22,11 +22,17 @@ export function Roster({ picks, players, summary, slots }: {
     return { lineup: buildLineup(won, byId, slots), byes: byeLoads(won, byId, slots) }
   }, [picks, players, slots])
 
-  // Weeks the bench can't cover, so a row can say so where the player is.
-  const uncovered = useMemo(
-    () => new Set(byes.filter((load) => load.holes > 0).map((load) => load.week)),
-    [byes],
-  )
+  // Which positions each week is actually short at, so a row can flag the
+  // player it's about. Keyed by week and asked with the player's own position:
+  // a week can be short at back and perfectly fine at receiver, and the
+  // receiver with three bodies behind him is not the problem.
+  const shortAt = useMemo(() => {
+    const map = new Map<number, Set<string>>()
+    for (const load of byes) {
+      if (load.holes > 0) map.set(load.week, new Set(load.uncoveredPositions))
+    }
+    return map
+  }, [byes])
 
   return (
     <div className="pane">
@@ -41,7 +47,7 @@ export function Roster({ picks, players, summary, slots }: {
 
       <ul className="roster-list">
         {lineup.starters.map((row) => (
-          <RosterRow key={row.key} row={row} uncovered={uncovered} />
+          <RosterRow key={row.key} row={row} shortAt={shortAt} />
         ))}
       </ul>
 
@@ -57,7 +63,7 @@ export function Roster({ picks, players, summary, slots }: {
 
       <ul className="roster-list">
         {lineup.bench.map((row) => (
-          <RosterRow key={row.key} row={row} bench uncovered={uncovered} />
+          <RosterRow key={row.key} row={row} bench shortAt={shortAt} />
         ))}
       </ul>
     </div>
@@ -119,9 +125,7 @@ function ByePlan({ loads }: { loads: ByeWeekLoad[] }) {
             <span className="bye-plan-week">Wk {load.week}</span>
             <span className="bye-plan-body">
               <span className="bye-plan-verdict">{describeLoad(load)}</span>
-              <span className="bye-plan-names">
-                {load.players.map((p) => p.name).join(', ')}
-              </span>
+              <span className="bye-plan-names">{describePlayers(load)}</span>
             </span>
           </li>
         ))}
@@ -148,6 +152,26 @@ function describeLoad(load: ByeWeekLoad): string {
   return `${load.players.length} on the bench out`
 }
 
+/**
+ * Who the line is about.
+ *
+ * On a week that costs a slot, only the players at the positions actually
+ * short are named — listing everyone off that week put a receiver with three
+ * bodies behind him next to an "RB uncovered" headline, which reads as though
+ * he were half the problem. The others are counted, not named, so the week's
+ * full weight is still visible.
+ *
+ * On a covered week there is no alert to be about, so everyone out is named.
+ */
+function describePlayers(load: ByeWeekLoad): string {
+  if (load.holes === 0) return load.players.map((p) => p.name).join(', ')
+
+  const short = load.players.filter((p) => load.uncoveredPositions.includes(p.position))
+  const rest = load.players.length - short.length
+  const names = short.map((p) => p.name).join(', ')
+  return rest > 0 ? `${names} · +${rest} covered` : names
+}
+
 /** `['RB', 'RB', 'OP']` → `RB×2, OP`, in the order the lineup lists them. */
 function countSlots(labels: string[]): string {
   const counts = new Map<string, number>()
@@ -155,10 +179,11 @@ function countSlots(labels: string[]): string {
   return [...counts].map(([label, n]) => (n > 1 ? `${label}×${n}` : label)).join(', ')
 }
 
-function RosterRow({ row, bench, uncovered }: {
+function RosterRow({ row, bench, shortAt }: {
   row: LineupRow
   bench?: boolean
-  uncovered: Set<number>
+  /** Week → the positions that week is short at. */
+  shortAt: Map<number, Set<string>>
 }) {
   const empty = !row.pick
   const player = row.player
@@ -199,7 +224,10 @@ function RosterRow({ row, bench, uncovered }: {
         {team && <span className="row-team">{team}</span>}
         <ByeChip
           week={player?.byeWeek}
-          uncovered={player?.byeWeek !== undefined && uncovered.has(player.byeWeek)}
+          uncovered={
+            player?.byeWeek !== undefined &&
+            (shortAt.get(player.byeWeek)?.has(player.position) ?? false)
+          }
         />
         {player?.injured && (
           <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>

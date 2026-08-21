@@ -82,6 +82,43 @@ describe('byeLoads', () => {
     expect(loads.find((l) => l.week === 9)!.uncovered).toEqual(['QB'])
   })
 
+  it('implicates only the positions that could have filled the empty slot', () => {
+    // A back and a receiver off the same week, but four receivers on the
+    // roster — the receiver's slot refills and the back's doesn't. The week is
+    // short at back only, and the receiver is not part of the problem.
+    const { won, byId } = roster([
+      [1, 'RB', 6, 40],
+      [2, 'WR', 6, 30],
+      [3, 'WR', 11, 25],
+      [4, 'WR', 11, 20],
+      [5, 'WR', 11, 15],
+    ])
+    const week6 = byeLoads(won, byId, 7).find((l) => l.week === 6)!
+
+    expect(week6.uncovered).toEqual(['RB'])
+    expect(week6.uncoveredPositions).toEqual(['RB'])
+    expect(week6.players.map((p) => p.position)).toEqual(['RB', 'WR']) // both still out
+  })
+
+  it('implicates every position the OP slot would have taken', () => {
+    // The OP slot is superflex-shaped, so when it goes dark any skill position
+    // could have stood in — and the flag has to say so rather than naming the
+    // one position whose label happens to be on the slot.
+    const { won, byId } = roster([
+      [1, 'QB', 9, 50],
+      [2, 'RB', 9, 40],
+      [3, 'RB', 9, 35],
+      [4, 'WR', 9, 30],
+      [5, 'WR', 9, 25],
+      [6, 'TE', 9, 20],
+      [7, 'RB', 6, 15], // the OP body
+    ])
+    const week6 = byeLoads(won, byId, 7).find((l) => l.week === 6)!
+
+    expect(week6.uncovered).toEqual(['OP'])
+    expect(week6.uncoveredPositions).toEqual(['QB', 'RB', 'WR', 'TE'])
+  })
+
   it('lets the superflex OP slot cover across positions', () => {
     // The back in the OP slot is off, and the only spare is a quarterback.
     // This league's OP takes one, so nothing is lost — under a normal FLEX

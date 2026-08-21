@@ -137,6 +137,12 @@ first, naming the starting slots that go empty — `Wk 5 · RB×2, OP uncovered`
 or saying the bench covers it. Naming beats counting: it tells you which
 position to go shopping for.
 
+The gold chip on a roster row asks the same question per *player*: it marks
+someone only when the week is short at **their** position. A receiver with
+three bodies behind him is not a problem just because the back beside him is,
+and the names under an alert list the players it's actually about, counting the
+rest as `+1 covered`.
+
 Only the weeks that cost a starting slot show by default; the covered ones fold
 away behind a `3 covered` toggle, and the block says *Every bye week is
 covered* when there's nothing to flag. A bye you can cover is not news, and six
