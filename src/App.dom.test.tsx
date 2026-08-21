@@ -890,6 +890,32 @@ describe('draft board end to end', () => {
     expect(rosterPanel.hasAttribute('hidden')).toBe(true)
   })
 
+  it('starts each tab at the top of the page', async () => {
+    // The other half of keeping both panels mounted: one document, one scroll
+    // offset shared by every tab. Without this, tapping My team from deep in
+    // the board opens the roster somewhere past its end.
+    const user = userEvent.setup()
+    const scrollTo = vi.fn()
+    vi.stubGlobal('scrollTo', scrollTo)
+
+    try {
+      render(<App adapter={new FakeAdapter()} />)
+      await findRow('Jahmyr Gibbs')
+
+      await user.click(screen.getByRole('button', { name: 'My team' }))
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
+
+      // And on the way back, and again on the tab you are already on — the
+      // phone idiom, and the reason this isn't conditioned on the tab moving.
+      scrollTo.mockClear()
+      await user.click(screen.getByRole('button', { name: 'Board' }))
+      await user.click(screen.getByRole('button', { name: 'Board' }))
+      expect(scrollTo).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('marks every row so the scroll anchor can find it again', async () => {
     // useScrollAnchor locates the tapped row by this attribute after the
     // accordion has moved. Drop it and the hook degrades silently: no error,
