@@ -1074,3 +1074,50 @@ describe('next move banner', () => {
     expect(nextMove()).not.toBeVisible()
   })
 })
+
+describe('the API key field', () => {
+  /**
+   * A password manager was claiming this field: offering to fill it unprompted,
+   * and leaving its inline overlay floating over other tabs after the input had
+   * unmounted. The opt-outs below are the only documented way to tell each
+   * extension to stay away, and they are invisible in every other respect —
+   * nothing else in the app would fail if a refactor quietly dropped them.
+   */
+  const openSettings = async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await user.click(await screen.findByRole('button', { name: 'Settings' }))
+    return document.querySelector('.key-input') as HTMLInputElement
+  }
+
+  it('opts out of every password manager we can name', async () => {
+    const input = await openSettings()
+
+    expect(input).toBeTruthy()
+    expect(input.getAttribute('autocomplete')).toBe('off')
+    expect(input.hasAttribute('data-1p-ignore')).toBe(true)
+    expect(input.getAttribute('data-lpignore')).toBe('true')
+    expect(input.getAttribute('data-bwignore')).toBe('true')
+    expect(input.getAttribute('data-form-type')).toBe('other')
+  })
+
+  it('never renders the key in the clear', async () => {
+    // Whichever branch MASK_TEXT took, the key is masked: a plain text input is
+    // only allowed to be one while it carries the class that masks it in CSS.
+    const input = await openSettings()
+
+    if (input.type === 'text') expect([...input.classList]).toContain('key-input-masked')
+    else expect(input.type).toBe('password')
+  })
+
+  it('does not let a phone keyboard rewrite a pasted key', async () => {
+    // type="password" suppressed autocorrect and autocapitalisation for free.
+    // type="text" does not, and a helpfully capitalised "Sk-ant-…" fails at
+    // the API with an auth error that looks like a revoked key.
+    const input = await openSettings()
+
+    expect(input.getAttribute('autocorrect')).toBe('off')
+    expect(input.getAttribute('autocapitalize')).toBe('off')
+    expect(input.getAttribute('spellcheck')).toBe('false')
+  })
+})

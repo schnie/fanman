@@ -3,6 +3,24 @@ import { DEFAULT_SETTINGS, type Scoring, type Settings } from '../domain/types'
 import type { DataAdapter } from '../data/adapter'
 import { describeAge } from '../lib/format'
 
+/**
+ * A password manager treats any `type="password"` holding a saved value as a
+ * login field: it offers to fill it unprompted, and its inline overlay can
+ * outlive the input it was anchored to. `autocomplete="off"` does not help —
+ * browsers deliberately ignore it on password inputs. So where the browser can
+ * mask a plain text input in CSS, the key field is a text input and never looks
+ * like a credential in the first place.
+ *
+ * Detected once, before first render, rather than swapped in afterwards: a
+ * field that is briefly a password input on mount has already been seen. Where
+ * masking is unsupported we keep `type="password"`, because a key rendered in
+ * the clear on a phone held up in a room full of people is the worse failure.
+ */
+const MASK_TEXT =
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  CSS.supports('-webkit-text-security', 'disc')
+
 export function SettingsPane({
   settings,
   fetchedAt,
@@ -92,11 +110,24 @@ export function SettingsPane({
       <label className="field field-stacked">
         <span>Anthropic API key</span>
         <input
-          type="password"
+          /*
+           * Not `type="password"` when we can avoid it — see MASK_TEXT above.
+           * The vendor opt-outs below are the only documented way to tell each
+           * extension to leave a field alone; they cost nothing on browsers
+           * where no such extension is installed.
+           */
+          type={MASK_TEXT ? 'text' : 'password'}
+          className={MASK_TEXT ? 'key-input key-input-masked' : 'key-input'}
           value={apiKey}
           placeholder="sk-ant-…"
           autoComplete="off"
           spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
           onChange={(e) => setApiKey(e.target.value)}
         />
       </label>
