@@ -75,11 +75,22 @@ export const PlayerRow = memo(function PlayerRow({
   onRetryProfile,
 }: PlayerRowProps) {
   const taken = Boolean(pick)
+  const teamEntity = isTeamEntity(player.id)
+
+  // Offline, neither half of the detail can fetch anything, and each used to
+  // say so in its own words — two "Offline" lines with the profile slot's
+  // reserved 144px of empty space between them, for a row whose only useful
+  // content is the two buttons at the bottom. So the row owns the message now:
+  // render whatever was cached before the connection went, say we are offline
+  // once for whatever is missing, and get out of the way of the draft.
+  const hasProfile = profile !== undefined || teamEntity
+  const showProfile = !offline || hasProfile
+  const showScout = !offline || scout !== undefined
   // Suppressed for D/ST and head coaches: "Texans D/ST · HOU" says the same
   // thing twice. Their avatar is the crest, which already carries the team.
   // Asked by id, like every other team-entity test in the feature — keying one
   // of them off the position label instead would let the two notions drift.
-  const team = isTeamEntity(player.id) ? null : teamAbbr(player.proTeamId)
+  const team = teamEntity ? null : teamAbbr(player.proTeamId)
 
   return (
     // `data-row-anchor` is how useScrollAnchor finds this row again after the
@@ -136,24 +147,37 @@ export const PlayerRow = memo(function PlayerRow({
               season stats will occupy. Without it the panel opened one line
               tall and then grew by most of a screen, shoving the action
               buttons out from under a thumb already on its way to them. */}
-          <div className={`profile-slot${isTeamEntity(player.id) ? ' profile-slot-bare' : ''}`}>
-            <ProfileCard
-              player={player}
-              profile={profile}
-              loading={profileLoading}
-              error={profileError}
-              offline={offline}
-              onRetry={() => onRetryProfile(player)}
+          {/* Nothing is in flight offline, so there is no wait to cover and
+              nothing to reserve — same reasoning as a team entity. */}
+          {showProfile && (
+            <div className={`profile-slot${teamEntity || offline ? ' profile-slot-bare' : ''}`}>
+              <ProfileCard
+                player={player}
+                profile={profile}
+                loading={profileLoading}
+                // A stale error from before the connection dropped would push
+                // out the cached card and offer a Retry that cannot run.
+                error={offline ? undefined : profileError}
+                onRetry={() => onRetryProfile(player)}
+              />
+            </div>
+          )}
+
+          {offline && (!hasProfile || !scout) && (
+            <p className="row-offline">
+              Offline — player info and scouting need a connection. Marking picks still works.
+            </p>
+          )}
+
+          {showScout && (
+            <ScoutPanel
+              report={scout}
+              loading={scouting}
+              error={scoutError}
+              hasKey={hasKey}
+              onScout={() => onScout(player)}
             />
-          </div>
-          <ScoutPanel
-            report={scout}
-            loading={scouting}
-            error={scoutError}
-            hasKey={hasKey}
-            offline={offline}
-            onScout={() => onScout(player)}
-          />
+          )}
           {/* Recording what a player actually went for sharpens the room's
               remaining money. Optional and out of the primary action row, so
               crossing someone off stays one tap. */}

@@ -1142,6 +1142,18 @@ hr {
   color: var(--muted);
 }
 
+/* The one thing an open row says when there is no connection. Not a flex
+   one-liner like the empty states above: it is a sentence that wraps to two
+   lines on a phone, and it stands in for the profile slot rather than sitting
+   beside it, so it sets its own height from its text. */
+.row-offline {
+  margin: 0;
+  padding: 2px 14px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* No underline: it reads as a link to somewhere else, and the descenders made
    the swap to plain text look like a jump. Accent colour carries it. */
 .inline-link,

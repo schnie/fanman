@@ -462,7 +462,7 @@ describe('draft board end to end', () => {
 
       expect(screen.getByText('Offline')).toBeInTheDocument()
       await user.click(getRow('Jahmyr Gibbs'))
-      expect(screen.getByText(/Offline — scouting needs a connection/)).toBeInTheDocument()
+      expect(screen.getByText(/Offline — player info and scouting/)).toBeInTheDocument()
     } finally {
       online.mockRestore()
     }
@@ -804,17 +804,44 @@ describe('player profiles', () => {
     expect(calls).toBe(2)
   })
 
-  it('says it is offline rather than failing obscurely', async () => {
+  it('says it is offline once, not once per panel, and keeps the draft usable', async () => {
     const user = userEvent.setup()
     const adapter = new ProfileAdapter()
+    adapter.apiKey = 'sk-ant-test'
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
     try {
       render(<App adapter={adapter} />)
       await findRow('Jahmyr Gibbs')
       await openRow(user, 'Jahmyr Gibbs')
+      const row = getRow('Jahmyr Gibbs').closest('.row') as HTMLElement
 
-      expect(screen.getByText('Offline — profile unavailable.')).toBeInTheDocument()
+      expect(row.querySelectorAll('.row-offline')).toHaveLength(1)
+      // The panels that had nothing to say stand down entirely, so there is no
+      // reserved profile slot holding a gap open under the message.
+      expect(row.querySelector('.profile-slot')).toBeNull()
+      expect(row.querySelector('.scout-empty')).toBeNull()
+      // The point of the row offline is still there.
+      expect(within(row).getByRole('button', { name: 'Gone' })).toBeInTheDocument()
+      expect(within(row).getByRole('button', { name: 'We got them' })).toBeInTheDocument()
       expect(adapter.fetched).toEqual([])
+    } finally {
+      online.mockRestore()
+    }
+  })
+
+  it('still shows a cached profile offline, with one note for what is missing', async () => {
+    const user = userEvent.setup()
+    const adapter = new ProfileAdapter()
+    adapter.profiles = [makeProfile(1, { college: 'Cached U' })]
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      render(<App adapter={adapter} />)
+      await findRow('Jahmyr Gibbs')
+      await openRow(user, 'Jahmyr Gibbs')
+      const row = getRow('Jahmyr Gibbs').closest('.row') as HTMLElement
+
+      expect(await within(row).findByText(/Cached U/)).toBeInTheDocument()
+      expect(row.querySelectorAll('.row-offline')).toHaveLength(1)
     } finally {
       online.mockRestore()
     }
