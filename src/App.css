@@ -292,10 +292,13 @@
 
 /* ---------- next move ---------- */
 
-/* Sits between the sticky header and the board, on the banner's margins so it
-   shares a left edge with everything else on the page. */
+/* Sits between the sticky header and the board, sharing a left edge with
+   everything else on the page. The top margin matters: the sticky header
+   paints its own divider with a box-shadow, and without a gap the banner sat
+   flush against that line and read as part of the filter row rather than as
+   the first thing on the board. Symmetric with the gap to the first row below. */
 .nextmove {
-  margin: 0 14px 10px;
+  margin: 10px 14px;
   padding: 8px 10px 9px;
   border: 1px solid var(--line);
   border-radius: 8px;
