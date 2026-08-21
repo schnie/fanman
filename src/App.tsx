@@ -32,6 +32,15 @@ type Tab = (typeof TABS)[number][0]
 const FILTERS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'OP', 'K', 'D/ST', 'HC'] as const
 
 /**
+ * Is the search box currently showing exactly this player, i.e. did a tap on
+ * the banner put it there? Compared the same way the board filters (trimmed,
+ * case-folded) so the toggle can never disagree with what the list is doing.
+ */
+function isSearchFor(query: string, player: Player): boolean {
+  return query.trim().toLowerCase() === player.name.toLowerCase()
+}
+
+/**
  * `adapter` is injectable so the Wails shell can supply its own implementation
  * — and so tests can drive the real UI without touching the network.
  */
@@ -94,11 +103,26 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
    * than opening a bid sheet — you still have to watch the room bid on him.
    * Clearing the position filter too, since the suggestion routinely names
    * someone the current filter is hiding.
+   *
+   * Tapping it again puts the board back. The banner is the only control that
+   * fills the search box, so it is the one place a second tap can mean "undo
+   * that" without guessing; the alternative was reaching for the ✕ at the
+   * other end of the header mid-nomination. It deliberately does *not* restore
+   * the position filter it cleared: you are back to the whole board, which is
+   * where you want to be between nominations, and re-hiding rows on the way
+   * out would be a second surprise.
    */
-  const findPlayer = useCallback((player: Player) => {
-    setFilter('ALL')
-    setQuery(player.name)
-  }, [])
+  const findPlayer = useCallback(
+    (player: Player) => {
+      if (isSearchFor(query, player)) {
+        setQuery('')
+        return
+      }
+      setFilter('ALL')
+      setQuery(player.name)
+    },
+    [query],
+  )
 
   // Profiles are free, so unlike the scout this needs no key, no spend dial and
   // no pre-warm — it just follows whichever row is open.
@@ -259,7 +283,13 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
             hunting a name, which is when it stops being the point. `advice` is
             null when there is nothing worth the height — the domain makes that
             call, so there is no second guard here. */}
-        {advice && <NextMove advice={advice} onFind={findPlayer} />}
+        {advice && (
+          <NextMove
+            advice={advice}
+            onFind={findPlayer}
+            finding={advice.kind === 'move' && isSearchFor(query, advice.pick.player)}
+          />
+        )}
         {loading && players.length === 0 && <p className="empty">Loading rankings…</p>}
         {!loading && visible.length === 0 && players.length > 0 && (
           <p className="empty">No players match.</p>
