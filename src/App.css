@@ -292,6 +292,14 @@
 
 /* ---------- board ---------- */
 
+/* The board is hidden, not unmounted, while another tab is up — see App. Said
+   here as well as in the markup because `hidden` is only a UA default: any
+   `display` landing on this class later would quietly outrank it and leave the
+   whole board stacked under the roster. */
+.board-panel[hidden] {
+  display: none;
+}
+
 .board,
 .roster-list {
   list-style: none;
