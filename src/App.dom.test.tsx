@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import App from './App'
 import { BID_PROMPT } from './components/BidSheet'
 import type { CachedRankings, DataAdapter } from './data/adapter'
+import { DEFAULT_SETTINGS } from './domain/types'
 import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
 import { makePlayer, makeProfile, makeReport } from './test/factories'
@@ -1122,5 +1123,83 @@ describe('the API key field', () => {
     expect(input.getAttribute('autocorrect')).toBe('off')
     expect(input.getAttribute('autocapitalize')).toBe('off')
     expect(input.getAttribute('spellcheck')).toBe('false')
+  })
+})
+
+describe('the settings number fields', () => {
+  /**
+   * Every one of these describes an edit that used to be impossible, because
+   * the fields clamped each keystroke into settings: the box could never be
+   * empty, and a digit below the minimum was rewritten before you could type
+   * the one after it.
+   */
+  const openSettings = async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    render(<App adapter={adapter} />)
+    await user.click(await screen.findByRole('button', { name: 'Settings' }))
+    return { user, adapter }
+  }
+
+  const field = (name: string) => screen.getByRole('spinbutton', { name })
+
+  it('lets you empty a field and type the number you actually want', async () => {
+    const { user, adapter } = await openSettings()
+    const budget = field('Budget')
+
+    await user.clear(budget)
+    expect(budget).toHaveValue(null)
+
+    await user.type(budget, '250')
+    expect(budget).toHaveValue(250)
+    await waitFor(() => expect(adapter.draft?.settings.budget).toBe(250))
+  })
+
+  it('does not rewrite a first digit that is below the minimum', async () => {
+    // Teams has a minimum of 2, so typing "10" used to land on 20: the "1"
+    // clamped up to 2 and the "0" appended to it.
+    const { user } = await openSettings()
+    const teams = field('Teams')
+
+    await user.clear(teams)
+    await user.type(teams, '10')
+
+    expect(teams).toHaveValue(10)
+  })
+
+  it('settles a half-typed number when you leave the field', async () => {
+    const { user, adapter } = await openSettings()
+    const teams = field('Teams')
+
+    await user.clear(teams)
+    await user.type(teams, '1')
+    expect(teams).toHaveValue(1)
+
+    await user.tab()
+    expect(teams).toHaveValue(2)
+    await waitFor(() => expect(adapter.draft?.settings.teamCount).toBe(2))
+  })
+
+  it('falls back to the default only once a field is left empty', async () => {
+    const { user, adapter } = await openSettings()
+    const slots = field('Roster slots')
+
+    await user.clear(slots)
+    expect(slots).toHaveValue(null)
+
+    await user.tab()
+    expect(slots).toHaveValue(DEFAULT_SETTINGS.slots)
+    await waitFor(() => expect(adapter.draft?.settings.slots).toBe(DEFAULT_SETTINGS.slots))
+  })
+
+  it('commits on Enter, which no phone keyboard is going to blur for us', async () => {
+    const { user, adapter } = await openSettings()
+    const depth = field('Auto-scout top N')
+
+    await user.clear(depth)
+    await user.type(depth, '99{Enter}')
+
+    expect(depth).toHaveValue(40)
+    await waitFor(() => expect(adapter.draft?.settings.prewarmDepth).toBe(40))
   })
 })
