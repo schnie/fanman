@@ -72,6 +72,40 @@ describe.each(SHEETS)('%s', (file) => {
   })
 })
 
+describe('the position palette actually reaches the chips', () => {
+  const root = postcss.parse(readFileSync('src/App.css', 'utf8'), { from: 'src/App.css' })
+
+  /**
+   * `.pos` and `.slot` set a fallback `color`, and `.pos-QB` / `.slot-QB` tint
+   * it. Both are one class, so they have identical specificity and the later
+   * rule in the sheet wins outright — a base rule that drifts below the
+   * palette turns every chip it owns muted grey. Nothing catches that: the CSS
+   * is valid, the class is applied, the build is green and the colour is
+   * simply gone. It shipped that way for the roster's slot chips.
+   */
+  const lineOf = (predicate: (selector: string) => boolean): number[] => {
+    const lines: number[] = []
+    root.walkRules((r) => {
+      if (r.parent?.type === 'atrule') return
+      if (predicate(r.selector.replace(/\s+/g, ' ').trim())) lines.push(r.source?.start?.line ?? 0)
+    })
+    return lines
+  }
+
+  it.each(['pos', 'slot'])('defines the .%s base rule above the palette', (base) => {
+    const baseLines = lineOf((sel) => sel === `.${base}`)
+    expect(baseLines).toHaveLength(1)
+
+    // Every rule that tints this family of chips.
+    const tintLines = lineOf((sel) =>
+      sel.split(',').some((part) => new RegExp(`^\\.${base}-[A-Za-z]+$`).test(part.trim())),
+    )
+    expect(tintLines.length).toBeGreaterThan(0)
+
+    expect(Math.min(...tintLines)).toBeGreaterThan(baseLines[0])
+  })
+})
+
 describe('settings fields line up', () => {
   const root = postcss.parse(readFileSync('src/App.css', 'utf8'), { from: 'src/App.css' })
 
