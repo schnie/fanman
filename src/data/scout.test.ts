@@ -140,6 +140,18 @@ describe('readableApiMessage', () => {
     expect(readableApiMessage(JSON.stringify({ nested: { deep: true } }))).toBe('')
   })
 
+  it('shows nothing rather than a captive portal in the row', () => {
+    // Venue wifi answers with a login page and the SDK hands the HTML through
+    // as the message. Braces are not the only way to print a raw response.
+    const html = '407 <!DOCTYPE html><html><head><title>Proxy Authentication</title></head>'
+    expect(readableApiMessage(html)).toBe('')
+  })
+
+  it('drops the SDK\'s own filler for a bodiless failure', () => {
+    expect(readableApiMessage('400 status code (no body)')).toBe('')
+    expect(readableApiMessage('418   ')).toBe('')
+  })
+
   it('truncates a message too long to read mid-bid', () => {
     const long = readableApiMessage('x'.repeat(400))
     expect(long.length).toBeLessThanOrEqual(160)

@@ -17,6 +17,14 @@ const CONCURRENCY = 2
  */
 export const REPORT_TTL_MS = 12 * 60 * 60 * 1000
 
+/**
+ * Enough to tell one key from another without keeping the key around. The
+ * hook has no other reason to hold a secret in memory, so it doesn't.
+ */
+function fingerprint(key: string | null): string | null {
+  return key ? `${key.length}:${key.slice(-4)}` : null
+}
+
 export function isFresh(report: ScoutReport | undefined, now = Date.now()): boolean {
   return Boolean(report && now - report.fetchedAt < REPORT_TTL_MS)
 }
@@ -51,6 +59,7 @@ export function useScout(
    * way back was re-saving the key or resetting the draft.
    */
   const [paused, setPaused] = useState(false)
+  const keyPrint = useRef<string | null>(null)
   const [loaded, setLoaded] = useState(false)
 
   const queue = useRef<Player[]>([])
@@ -65,13 +74,26 @@ export function useScout(
    */
   const queued = useRef(new Set<number>())
   const running = useRef(new Set<number>())
+  /**
+   * Bumped every time the pre-warm pauses, so a call can tell whether it
+   * started before or after the failure that paused it.
+   *
+   * Without it, two concurrent calls are enough to defeat the pause: the
+   * balance runs out, B comes back `billing` and pauses, then A — which
+   * started earlier and spent the last of the credit — succeeds and clears
+   * the pause, refilling the queue with calls that can only fail.
+   */
+  const pauseEpoch = useRef(0)
   const isDispatched = useCallback(
     (id: number) => queued.current.has(id) || running.current.has(id),
     [],
   )
 
   useEffect(() => {
-    adapter.loadApiKey().then((k) => setHasKey(Boolean(k)))
+    adapter.loadApiKey().then((k) => {
+      keyPrint.current = fingerprint(k)
+      setHasKey(Boolean(k))
+    })
   }, [adapter])
 
   // Rehydrate before anything can queue, so restored reports suppress the
@@ -111,17 +133,20 @@ export function useScout(
 
   const run = useCallback(
     async (player: Player) => {
+      const startedAt = pauseEpoch.current
       setPending((prev) => setAdd(prev, player.id))
       try {
         const report = await adapter.scoutPlayer(player)
         setReports((prev) => mapSet(prev, player.id, report))
         setErrors((prev) => mapRemove(prev, player.id))
         setCalls((n) => n + 1)
-        // A call got through, so whatever we paused for is fixed. This is the
-        // only thing that lifts the pause, deliberately: lifting it on the
-        // *request* would let the pre-warm refill behind a manual retry and
-        // pay for the same failure once per row all over again.
-        setPaused(false)
+        // A call that started under the current epoch got through, so
+        // whatever we paused for is fixed. Only a success lifts the pause,
+        // deliberately: lifting it on the *request* would let the pre-warm
+        // refill behind a manual retry and pay for the same failure once per
+        // row. And only a success from *after* the pause, because one that was
+        // already in flight proves nothing about the account now.
+        if (startedAt === pauseEpoch.current) setPaused(false)
       } catch (err) {
         const kind = isScoutError(err) ? err.kind : 'other'
         setErrors((prev) =>
@@ -134,6 +159,7 @@ export function useScout(
         if (isAccountProblem(kind)) {
           queue.current = []
           queued.current.clear()
+          pauseEpoch.current += 1
           setPaused(true)
         } else {
           setCalls((n) => n + 1)
@@ -199,10 +225,19 @@ export function useScout(
   }, [hasKey, paused, loaded, online, prewarmDepth, players, picks, reports, enqueue])
 
   const refreshKey = useCallback(async () => {
-    setHasKey(Boolean(await adapter.loadApiKey()))
-    // A key just changed in Settings, which is the fix for the commonest
-    // pause; let the pre-warm try again rather than making the user tap a row.
-    setPaused(false)
+    const key = await adapter.loadApiKey()
+    const print = fingerprint(key)
+    // A *different* key is new information about the account and the fix for
+    // the commonest pause, so the pre-warm may try again rather than making
+    // the user tap a row. Saving the same key back — the reflex when a draft
+    // stalls — tells us nothing, and resuming on it would spend another round
+    // of calls reproducing the failure.
+    if (key && print !== keyPrint.current) {
+      pauseEpoch.current += 1
+      setPaused(false)
+    }
+    keyPrint.current = print
+    setHasKey(Boolean(key))
   }, [adapter])
 
   return { reports, pending, errors, calls, hasKey, paused, scoutNow, refreshKey, clearReports }

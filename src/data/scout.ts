@@ -214,7 +214,7 @@ export function readableApiMessage(raw: unknown): string {
 
   const first = text.indexOf('{')
   const last = text.lastIndexOf('}')
-  if (first === -1 || last <= first) return cap(text)
+  if (first === -1 || last <= first) return isProse(text) ? cap(text) : ''
 
   try {
     const body = JSON.parse(text.slice(first, last + 1)) as {
@@ -226,6 +226,22 @@ export function readableApiMessage(raw: unknown): string {
   } catch {
     return '' // unparseable braces: still not something to put in front of a bidder
   }
+}
+
+/**
+ * Is this something a person wrote, or something a machine emitted?
+ *
+ * The SDK passes an unparseable body straight through as the message, so on
+ * venue wifi a captive portal or an intercepting proxy answering with an HTML
+ * page lands here — and a row rendering `<!DOCTYPE html><html><head><title>407`
+ * is the same failure as rendering the JSON, in a different alphabet. Markup,
+ * a string with no words in it, and the SDK's own `"<status> status code (no
+ * body)"` filler are all dropped in favour of the generic sentence.
+ */
+function isProse(text: string): boolean {
+  if (/[<>{}]/.test(text)) return false
+  if (!/[a-z]/i.test(text)) return false
+  return !/^status code\b/i.test(text)
 }
 
 /** Long enough for a real API sentence, short enough not to bury the retry. */

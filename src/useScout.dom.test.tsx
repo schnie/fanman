@@ -216,6 +216,76 @@ describe('useScout', () => {
     })
   })
 
+  it('does not let a call already in flight lift the pause', async () => {
+    // Two calls run at once, so the last of the credit can be spent by one of
+    // them while the other comes back empty-handed: B fails `billing` and
+    // pauses, then A — started earlier, and the reason there is nothing left —
+    // succeeds. Treating that as proof the account is healthy refilled the
+    // queue with calls that could only fail.
+    let release!: () => void
+    const inFlight = new Promise<void>((r) => (release = r))
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        if (p.id !== 1) throw new ScoutError('Out of Claude API credit', 'billing')
+        await inFlight
+        return makeReport(1)
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 5))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    const before = scouted.length
+
+    await act(async () => {
+      release()
+      await inFlight
+    })
+    await waitFor(() => expect(result.current.reports.has(1)).toBe(true))
+
+    expect(result.current.paused).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(scouted).toHaveLength(before)
+  })
+
+  it('resumes on a new key, not on the same one saved again', async () => {
+    // Reopening Settings and tapping Save is the reflex when a draft stalls.
+    // Nothing about the account changed, so resuming on it just buys another
+    // round of the same failure.
+    let key = 'sk-ant-bad'
+    const scouted: number[] = []
+    const { adapter } = makeAdapter({
+      async loadApiKey() {
+        return key
+      },
+      async scoutPlayer(p: Player): Promise<ScoutReport> {
+        scouted.push(p.id)
+        if (key === 'sk-ant-bad') throw new ScoutError('API key rejected', 'auth')
+        return makeReport(p.id)
+      },
+    })
+    const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 2))
+
+    await waitFor(() => expect(result.current.paused).toBe(true))
+    const before = scouted.length
+
+    await act(async () => {
+      await result.current.refreshKey()
+    })
+    expect(result.current.paused).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(scouted).toHaveLength(before)
+
+    key = 'sk-ant-good'
+    await act(async () => {
+      await result.current.refreshKey()
+    })
+
+    await waitFor(() => expect(result.current.reports.size).toBeGreaterThan(0))
+    expect(result.current.paused).toBe(false)
+  })
+
   it('counts calls so spend is visible', async () => {
     const { adapter } = makeAdapter()
     const { result } = renderHook(() => useScout(adapter, BOARD, noPicks, 3))
