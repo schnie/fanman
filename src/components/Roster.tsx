@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { wonPicksFrom, type BudgetSummary } from '../domain/budget'
 import { buildLineup, type LineupRow } from '../domain/lineup'
+import { byeLoads, type ByeWeekLoad } from '../domain/byes'
 import type { Pick, Player } from '../domain/types'
 import { posClass } from '../lib/format'
 import { isTeamEntity, teamAbbr } from '../data/proTeams'
+import { ByeChip } from './ByeChip'
 import { PlayerAvatar } from './PlayerAvatar'
 
 export function Roster({ picks, players, summary, slots }: {
@@ -12,11 +14,19 @@ export function Roster({ picks, players, summary, slots }: {
   summary: BudgetSummary
   slots: number
 }) {
-  const lineup = useMemo(() => {
+  // One pass for both: the lineup and the bye plan read the same roster, and
+  // splitting them meant building the id map and the won-pick list twice.
+  const { lineup, byes } = useMemo(() => {
     const byId = new Map(players.map((p) => [p.id, p]))
     const won = wonPicksFrom(picks)
-    return buildLineup(won, byId, slots)
+    return { lineup: buildLineup(won, byId, slots), byes: byeLoads(won, byId, slots) }
   }, [picks, players, slots])
+
+  // Weeks the bench can't cover, so a row can say so where the player is.
+  const uncovered = useMemo(
+    () => new Set(byes.filter((load) => load.holes > 0).map((load) => load.week)),
+    [byes],
+  )
 
   return (
     <div className="pane">
@@ -25,9 +35,13 @@ export function Roster({ picks, players, summary, slots }: {
         <div><strong>${summary.remaining}</strong> left · <strong>{summary.slotsLeft}</strong> open</div>
       </div>
 
+      {/* Above the lineup, not below it: it's the question you ask *between*
+          nominations, and the roster is fifteen rows deep on a phone. */}
+      <ByePlan loads={byes} />
+
       <ul className="roster-list">
         {lineup.starters.map((row) => (
-          <RosterRow key={row.key} row={row} />
+          <RosterRow key={row.key} row={row} uncovered={uncovered} />
         ))}
       </ul>
 
@@ -43,14 +57,64 @@ export function Roster({ picks, players, summary, slots }: {
 
       <ul className="roster-list">
         {lineup.bench.map((row) => (
-          <RosterRow key={row.key} row={row} bench />
+          <RosterRow key={row.key} row={row} bench uncovered={uncovered} />
         ))}
       </ul>
     </div>
   )
 }
 
-function RosterRow({ row, bench }: { row: LineupRow; bench?: boolean }) {
+/**
+ * The weeks our roster is off, worst first.
+ *
+ * Wording lives here and the arithmetic lives in `domain/byes.ts`, the same
+ * split the next-move banner uses: a copy edit must never be able to change
+ * what the number means.
+ */
+function ByePlan({ loads }: { loads: ByeWeekLoad[] }) {
+  if (loads.length === 0) return null
+
+  return (
+    <section className="bye-plan">
+      <h2 className="bye-plan-title">Bye weeks</h2>
+      <ul className="bye-plan-list">
+        {loads.map((load) => (
+          <li key={load.week} className={`bye-plan-row${load.holes > 0 ? ' short' : ''}`}>
+            <span className="bye-plan-week">Wk {load.week}</span>
+            <span className="bye-plan-body">
+              <span className="bye-plan-verdict">{describeLoad(load)}</span>
+              <span className="bye-plan-names">
+                {load.players.map((p) => p.name).join(', ')}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/**
+ * "Uncovered" is the only line that means trouble: it says the bench cannot
+ * refill a starting slot that week, however many players are out. Everything
+ * else is reported plainly, because a bye you can cover is not a problem and
+ * should not be dressed as one.
+ */
+function describeLoad(load: ByeWeekLoad): string {
+  if (load.holes > 0) {
+    return `${load.holes} starting ${load.holes === 1 ? 'slot' : 'slots'} uncovered`
+  }
+  if (load.starters > 0) {
+    return `${load.starters} ${load.starters === 1 ? 'starter' : 'starters'} out · bench covers`
+  }
+  return `${load.players.length} on the bench out`
+}
+
+function RosterRow({ row, bench, uncovered }: {
+  row: LineupRow
+  bench?: boolean
+  uncovered: Set<number>
+}) {
   const empty = !row.pick
   const player = row.player
   // The board's guard, unchanged: D/ST and head coaches carry their team in
@@ -88,6 +152,10 @@ function RosterRow({ row, bench }: { row: LineupRow; bench?: boolean }) {
         </span>
         {offSlot && <span className={`pos pos-${posClass(offSlot)}`}>{offSlot}</span>}
         {team && <span className="row-team">{team}</span>}
+        <ByeChip
+          week={player?.byeWeek}
+          uncovered={player?.byeWeek !== undefined && uncovered.has(player.byeWeek)}
+        />
         {player?.injured && (
           <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>
         )}

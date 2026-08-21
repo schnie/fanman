@@ -539,6 +539,31 @@
   color: var(--muted);
 }
 
+
+/* Bye week. Deliberately quieter than the team abbreviation next to it — it's
+   a scheduling fact, not part of who the player is — until it stacks on a week
+   we're already thin in, when it becomes the reason to pass. */
+.row-bye {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.row-bye.clash {
+  background: var(--tint-amber);
+  color: var(--amber);
+}
+
+.row-bye-count {
+  margin-left: 3px;
+  font-weight: 700;
+}
+
 .row-name {
   font-size: 16px;
   font-weight: 600;
@@ -867,6 +892,86 @@
   margin-bottom: 8px;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+
+/* The bye plan: which weeks the roster is off, and whether the bench covers
+   them. Sits between the summary and the lineup because it is read between
+   nominations, and the lineup below it is fifteen rows deep on a phone. */
+.bye-plan {
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.bye-plan-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.bye-plan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bye-plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bye-plan-week {
+  flex: 0 0 auto;
+  /* Same width for "Wk 5" and "Wk 14", so the verdicts line up in a column
+     you can scan instead of a ragged left edge. */
+  width: 44px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 0;
+  text-align: center;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.bye-plan-row.short .bye-plan-week {
+  background: var(--tint-amber);
+  color: var(--amber);
+}
+
+.bye-plan-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bye-plan-verdict {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bye-plan-row.short .bye-plan-verdict {
+  color: var(--amber);
+}
+
+/* Names are the supporting evidence, not the point — one line, truncated. */
+.bye-plan-names {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .roster-row {
