@@ -122,7 +122,13 @@ export const PlayerRow = memo(function PlayerRow({
 
         <span className="row-id">
           <span className="row-name">
-            {player.name}
+            {/* The name is wrapped rather than left as bare text so it can be
+                the thing that truncates. As an anonymous flex item under
+                `nowrap` its minimum size is the full name, so it refused to
+                shrink and pushed the chips after it — including the `Mine · $N`
+                badge, the only place the board shows what you paid — past the
+                clip edge instead. */}
+            <span className="row-player">{player.name}</span>
             {/* Which team someone plays for is half of knowing who they are,
                 and it was the one identifier the row already had in hand and
                 never showed. */}

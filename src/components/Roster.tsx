@@ -79,9 +79,12 @@ export function Roster({ picks, players, summary, slots }: {
  * problem week off the screen — which is the one thing this block exists to
  * put in front of you. The full story stays one tap away.
  *
- * Collapsed again every time you leave the tab, deliberately: what you want on
- * arrival is the alerts, and the expanded list is something you go looking for
- * rather than something you want restored mid-draft.
+ * Expanding survives a trip to the board, because this panel is hidden between
+ * tabs rather than unmounted. That's the right behaviour to inherit and not
+ * something to undo: opening it is a deliberate act, and re-folding it behind
+ * your back would read as the app losing your place. The alerts stay on top
+ * either way — `loads` is worst-first, so the covered weeks only ever appear
+ * beneath them.
  *
  * Wording lives here and the arithmetic lives in `domain/byes.ts`, the same
  * split the next-move banner uses: a copy edit must never be able to change

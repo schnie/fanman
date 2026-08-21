@@ -559,10 +559,19 @@
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+/* The name itself, and the only item here allowed to shrink — same pattern as
+   `.roster-player`. `text-overflow` on the flex container above does nothing;
+   it has to live on the item that actually holds the text, and that item needs
+   `min-width: 0` or its automatic minimum size is the whole name. */
+.row-player {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The name may truncate; the price badge beside it must not. */
