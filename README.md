@@ -137,6 +137,12 @@ first, naming the starting slots that go empty — `Wk 5 · RB×2, OP uncovered`
 or saying the bench covers it. Naming beats counting: it tells you which
 position to go shopping for.
 
+Only the weeks that cost a starting slot show by default; the covered ones fold
+away behind a `3 covered` toggle, and the block says *Every bye week is
+covered* when there's nothing to flag. A bye you can cover is not news, and six
+reassuring rows above a fifteen-row lineup push the problem week off a phone
+screen.
+
 Coverage is answered by re-running the lineup builder against the roster minus
 that week's byes (`src/domain/byes.ts`) rather than counting positions by hand.
 That's what makes it position-aware for free, and it's the only way the

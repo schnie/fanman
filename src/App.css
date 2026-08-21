@@ -904,8 +904,43 @@
   margin-bottom: 8px;
 }
 
+.bye-plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+/* Folds the covered weeks away. Sits on the heading's baseline so the section
+   reads as one line, and carries its own padding: a 12px label is a miserable
+   tap target on a phone otherwise. */
+.bye-plan-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 4px 2px;
+  margin: -4px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.bye-plan-caret {
+  font-size: 9px;
+}
+
+/* Stands in for the list when nothing is alerting and nothing is expanded —
+   a bare heading reads as a section that failed to load. */
+.bye-plan-clear {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .bye-plan-title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { wonPicksFrom, type BudgetSummary } from '../domain/budget'
 import { buildLineup, type LineupRow } from '../domain/lineup'
 import { byeLoads, type ByeWeekLoad } from '../domain/byes'
@@ -67,18 +67,54 @@ export function Roster({ picks, players, summary, slots }: {
 /**
  * The weeks our roster is off, worst first.
  *
+ * Only the weeks that actually cost a starting slot are shown; the covered
+ * ones fold away behind the count. A bye you can cover is not news, and above
+ * a lineup you're trying to read on a phone, six reassuring rows push the
+ * problem week off the screen — which is the one thing this block exists to
+ * put in front of you. The full story stays one tap away.
+ *
+ * Collapsed again every time you leave the tab, deliberately: what you want on
+ * arrival is the alerts, and the expanded list is something you go looking for
+ * rather than something you want restored mid-draft.
+ *
  * Wording lives here and the arithmetic lives in `domain/byes.ts`, the same
  * split the next-move banner uses: a copy edit must never be able to change
  * what the number means.
  */
 function ByePlan({ loads }: { loads: ByeWeekLoad[] }) {
+  const [open, setOpen] = useState(false)
   if (loads.length === 0) return null
+
+  // `loads` arrives worst-first, so this is a partition and never a re-sort:
+  // the rows keep the same order whether they're folded or not.
+  const alerting = loads.filter((load) => load.holes > 0)
+  const covered = loads.length - alerting.length
+  const shown = open ? loads : alerting
 
   return (
     <section className="bye-plan">
-      <h2 className="bye-plan-title">Bye weeks</h2>
+      <div className="bye-plan-head">
+        <h2 className="bye-plan-title">Bye weeks</h2>
+        {covered > 0 && (
+          <button
+            type="button"
+            className="bye-plan-toggle"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? 'Hide covered' : `${covered} covered`}
+            <span className="bye-plan-caret" aria-hidden="true">{open ? '▴' : '▾'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Nothing alerting and nothing expanded: say so outright rather than
+          leaving a bare heading, which reads as a section that failed to
+          load. */}
+      {shown.length === 0 && <p className="bye-plan-clear">Every bye week is covered.</p>}
+
       <ul className="bye-plan-list">
-        {loads.map((load) => (
+        {shown.map((load) => (
           <li key={load.week} className={`bye-plan-row${load.holes > 0 ? ' short' : ''}`}>
             <span className="bye-plan-week">Wk {load.week}</span>
             <span className="bye-plan-body">
