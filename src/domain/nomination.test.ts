@@ -175,6 +175,36 @@ describe('buying', () => {
     expect(advice.pick?.premium).toBe(-6)
   })
 
+  it('walks a real WR ladder to the tail of the tier and stops at the cliff', () => {
+    // The live 2026 WR board, market and book values as ESPN published them.
+    // Steps run 97%, 97%, 95%, 91%, 97% and then fall to 80% at London — the
+    // cliff. Lamb is the tail of the tier above it and the pick. London is a
+    // bigger discount ($5.6 under book against Lamb's $3.0) and must lose
+    // anyway: he is a worse player, not a cheaper name for the same one.
+    const wrs: [string, number, number][] = [
+      ["Ja'Marr Chase", 58.48, 56],
+      ['Puka Nacua', 56.8, 55],
+      ['Jaxon Smith-Njigba', 55.39, 54],
+      ['Amon-Ra St. Brown', 52.57, 52],
+      ['CeeDee Lamb', 47.99, 51],
+      ['Justin Jefferson', 46.77, 48],
+      ['Drake London', 37.38, 43],
+    ]
+    const players = [
+      ...wrs.map(([name, mkt, book], i) =>
+        makePlayer({ id: i + 1, name, position: 'WR', marketValue: mkt, espnValue: book }),
+      ),
+      // Bulk to keep the room's money and the board's listed value in step, so
+      // this lands in the buying posture rather than the draining one.
+      ...Array.from({ length: 200 }, (_, i) =>
+        makePlayer({ id: i + 100, marketValue: 13, espnValue: 13 }),
+      ),
+    ]
+    const advice = advise(players)
+    expect(advice.posture).toBe('buy')
+    expect(advice.pick?.player.name).toBe('CeeDee Lamb')
+  })
+
   it('ignores a discount that would cost real value', () => {
     // A cliff, not a tier: four players in the $200s and then a drop to $100.
     // The cheap one carries the biggest discount on the board — $30 under book

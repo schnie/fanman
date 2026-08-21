@@ -67,11 +67,17 @@ modes, and the banner names which one you're in:
 - **Buy.** Either the field can now outbid you, or inflation has fallen back to
   par and the room is out of money. Draining now would hand value to whoever
   still has cash, so nominate someone who fills one of your open starting slots
-  and open at $1 — there is never a reason to bid against yourself. Among
-  players close enough in value to be substitutes (within 15% of the best one
-  left) it prefers whoever the market has priced furthest under ESPN's book —
-  the same player with a cheaper name. Outside that band it just takes the best
-  player you can afford, so a small discount can never cost you a real tier.
+  and open at $1 — there is never a reason to bid against yourself. Which one
+  it picks is the *tail of the tier*: start at the best player you can afford,
+  walk his position's price ladder down until it falls off a cliff, and take
+  whoever inside that run the market has priced furthest under ESPN's book. The
+  same player with a cheaper name, never a worse one.
+
+  The tier is found rather than assumed, and it has to be found *within a
+  position*. Down the cross-position price ladder the median step keeps 97.8%
+  of the last player's value, so it is effectively continuous and has no cliffs
+  to find. Inside one position the structure is plain — the 2026 WR ladder runs
+  97%, 98%, 95%, 91%, 97% and then drops to 80%. That 80% is the tier boundary.
 
 The header also carries **Field ~$N**: what one *typical* rival can still bid,
 estimated from the money and roster spots left across the room. The draft log

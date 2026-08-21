@@ -92,27 +92,32 @@ const BEHIND_MARGIN = 0.9
 const DRAIN_POOL = 12
 
 /**
- * The tail of a tier. Rooms price by name rather than by cliff, so the fifth
- * player in a group of near-identical ones routinely sells for meaningfully
- * less than the first. When we're buying, that tail is where the value is.
+ * A tier ends where the price ladder falls off a cliff, and this is how big a
+ * step counts as one: the next player keeping less than 88% of the last.
+ *
+ * Measured against a live top-200 board rather than guessed. Two findings set
+ * this, and the first is the load-bearing one:
+ *
+ * **Tiers are positional.** Down the *cross-position* price ladder the median
+ * step keeps 97.8% and even the 5th percentile keeps 87.5% — with every
+ * position interleaved the ladder is effectively continuous, and walking it
+ * for a cliff runs 64 players deep and finds nothing meaningful. Inside a
+ * single position the structure is real and obvious: the 2026 WR ladder runs
+ * 97%, 98%, 95%, 91%, 97% and then drops to 80%. That 80% is a tier boundary
+ * you can see from across the room; nothing cross-position looks like it.
+ *
+ * **88% clears the noise.** It sits above the observed within-position breaks
+ * (80% at WR, 83% at RB) and below the ordinary step, so it cuts at cliffs and
+ * nowhere else.
  */
-const TIER_DEPTH = 5
+const TIER_CLIFF = 0.88
 
 /**
- * How far below the best player left a "near-identical" one is allowed to sit.
- *
- * Depth alone was not enough. The tail rule picks the *most discounted* player
- * in the window and only breaks ties on value, so a $3 discount beat any
- * amount of value: given a window spanning $58 down to $42 it would hand back
- * $16 of player to save $3 of overpay. That is only sound when the window is a
- * genuine tier, and nothing made it one — the top five can straddle a cliff,
- * and with several positions still open they aren't even the same position.
- *
- * Fifteen percent is about where "the same player with a cheaper name" stops
- * being true. Outside it the window collapses toward the best player left,
- * which is the right answer when there is no tier to find a tail in.
+ * A backstop on how far the cliff walk may run, not the definition of a tier.
+ * The walk normally stops on its own; this only bounds the degenerate case of
+ * a long flat run of near-identical prices deep in the board.
  */
-const TIER_BAND = 0.85
+const TIER_DEPTH = 8
 
 /**
  * Where to open a drain nomination, as a share of the expected sale price.
@@ -276,12 +281,18 @@ function buyPick(
   const wanted = affordable.filter((p) => needed.has(p.position))
   const pool = preferHealthy(wanted.length > 0 ? wanted : affordable)
 
-  // Depth *and* band: the discount rule only gets to run among players close
-  // enough in value to be substitutes. The leader always survives the filter,
-  // so a board with no tier left still yields the best player we can afford.
+  // The tier is found, not assumed: start at the best player we can afford and
+  // walk his *position's* ladder down until the price falls off a cliff. Only
+  // inside that run are two players substitutes, and only there does taking
+  // the cheaper name cost nothing. Cross-position the ladder has no cliffs to
+  // find, which is why this filters to one position first.
   const ranked = [...pool].sort(byValueDesc)
-  const floor = ranked[0].marketValue * TIER_BAND
-  const tier = ranked.slice(0, TIER_DEPTH).filter((p) => p.marketValue >= floor)
+  const ladder = ranked.filter((p) => p.position === ranked[0].position)
+  const tier = [ladder[0]]
+  for (let i = 0; i + 1 < ladder.length && tier.length < TIER_DEPTH; i++) {
+    if (ladder[i + 1].marketValue < ladder[i].marketValue * TIER_CLIFF) break
+    tier.push(ladder[i + 1])
+  }
 
   const player = [...tier].sort(
     (a, b) => marketPremium(a) - marketPremium(b) || b.marketValue - a.marketValue,
