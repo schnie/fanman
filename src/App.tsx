@@ -322,12 +322,14 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
               // the room's remaining money honest. Skippable in one tap.
               onPrice={openSold}
               room={displayRoomPrice(p, market.inflation)}
-              // Our own bye week doesn't clash with itself, so a player we
-              // already own is discounted out of their own count.
+              // Scoped to the player's own position: receivers on bye say
+              // nothing about the quarterback you're bidding on. Our own bye
+              // never clashes with itself, so a player we already own is
+              // discounted out of their own count.
               byeClash={
                 p.byeWeek === undefined
                   ? undefined
-                  : (ourByes.get(p.byeWeek) ?? 0) -
+                  : ourByes.at(p.position, p.byeWeek) -
                     (draft.picks.get(p.id)?.status === 'mine' ? 1 : 0)
               }
               onScout={scout.scoutNow}

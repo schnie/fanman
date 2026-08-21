@@ -50,6 +50,36 @@ describe('byeLoads', () => {
     expect(week5.players.map((p) => p.id)).toEqual([1, 2]) // dearest first
     expect(week5.starters).toBe(2)
     expect(week5.holes).toBe(1)
+    expect(week5.uncovered).toEqual(['RB'])
+  })
+
+  it('names the slots that go empty, not just how many', () => {
+    // A back and a receiver out the same week empty one of each. Naming them
+    // is what tells you which position to go shopping for.
+    const { won, byId } = roster([
+      [1, 'QB', 9, 50],
+      [2, 'RB', 5, 40],
+      [3, 'WR', 5, 30],
+    ])
+    const week5 = byeLoads(won, byId, 5).find((l) => l.week === 5)!
+
+    expect(week5.uncovered).toEqual(['RB', 'WR'])
+    expect(week5.holes).toBe(2)
+  })
+
+  it('never charges one position for another position\'s bye', () => {
+    // The whole point of asking the lineup builder: two receivers off in week
+    // 5 empty receiver slots. The quarterback's week is untouched, and his own
+    // week costs exactly one slot.
+    const { won, byId } = roster([
+      [1, 'QB', 9, 50],
+      [2, 'WR', 5, 40],
+      [3, 'WR', 5, 30],
+    ])
+    const loads = byeLoads(won, byId, 5)
+
+    expect(loads.find((l) => l.week === 5)!.uncovered).toEqual(['WR', 'WR'])
+    expect(loads.find((l) => l.week === 9)!.uncovered).toEqual(['QB'])
   })
 
   it('lets the superflex OP slot cover across positions', () => {
@@ -81,6 +111,7 @@ describe('byeLoads', () => {
       [2, 'WR', 9, 30],
     ])
     for (const load of byeLoads(won, byId, 15)) expect(load.holes).toBe(1)
+    expect(byeLoads(won, byId, 15).map((l) => l.uncovered)).toEqual([['RB'], ['WR']])
   })
 
   it('ignores players whose bye we never fetched', () => {
@@ -106,17 +137,30 @@ describe('byeLoads', () => {
 })
 
 describe('byeCounts', () => {
-  it('counts our players per week and skips unknown byes', () => {
+  it('counts only players at the same position', () => {
+    // The receiver sharing week 5 is not the back's problem: he could never
+    // have covered that slot, and counting him would flag the row with a
+    // number that means nothing.
     const { won, byId } = roster([
       [1, 'RB', 5, 40],
-      [2, 'WR', 5, 30],
-      [3, 'TE', 9, 20],
-      [4, 'QB', undefined, 10],
+      [2, 'RB', 5, 35],
+      [3, 'WR', 5, 30],
+      [4, 'TE', 9, 20],
     ])
     const counts = byeCounts(won, byId)
 
-    expect(counts.get(5)).toBe(2)
-    expect(counts.get(9)).toBe(1)
-    expect(counts.size).toBe(2)
+    expect(counts.at('RB', 5)).toBe(2)
+    expect(counts.at('WR', 5)).toBe(1)
+    expect(counts.at('QB', 5)).toBe(0)
+    expect(counts.at('TE', 9)).toBe(1)
+    expect(counts.at('TE', 5)).toBe(0)
+  })
+
+  it('skips players whose bye we never fetched', () => {
+    const { won, byId } = roster([
+      [1, 'RB', undefined, 40],
+      [2, 'RB', 5, 30],
+    ])
+    expect(byeCounts(won, byId).at('RB', 5)).toBe(1)
   })
 })

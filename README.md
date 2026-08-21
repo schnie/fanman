@@ -127,16 +127,22 @@ renders as *nothing*: a board restored from an older cache genuinely has no
 byes, and an invented week would read as a fact.
 
 On the **board**, the chip sits with the team abbreviation and turns amber when
-you already own someone off that week (`Bye 5 +1`) — the cost that a player's
-price doesn't tell you.
+you already own someone **at that position** off that week (`Bye 5 +1`) — the
+cost that a player's price doesn't tell you. Position-scoped on purpose: a
+week full of missing receivers says nothing about the quarterback you're
+bidding on, because no receiver was ever going to cover that slot.
 
 On **My team**, a *Bye weeks* block above the lineup lists each week worst
-first, saying whether the bench covers it or how many starting slots go empty.
-The coverage question is answered by re-running the lineup builder against the
-roster minus that week's byes (`src/domain/byes.ts`) rather than counting
-positions by hand — that keeps the superflex OP slot honest, where a spare QB
-really can cover a missing back. Holes are counted against the gaps the roster
-already has, so a half-drafted team doesn't report a catastrophe every week.
+first, naming the starting slots that go empty — `Wk 5 · RB×2, OP uncovered` —
+or saying the bench covers it. Naming beats counting: it tells you which
+position to go shopping for.
+
+Coverage is answered by re-running the lineup builder against the roster minus
+that week's byes (`src/domain/byes.ts`) rather than counting positions by hand.
+That's what makes it position-aware for free, and it's the only way the
+superflex OP slot stays honest — a spare QB really can cover a missing back
+there. Holes are the slots the bye *takes away*, so a half-drafted team doesn't
+report a catastrophe every week.
 
 ### Head coaches
 

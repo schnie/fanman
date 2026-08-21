@@ -93,8 +93,11 @@ fails independently of the rankings, and a board restored from an older cache
 carries no byes at all. `parseByeWeeks` drops ESPN's `byeWeek: 0` (the
 free-agent bucket) for the same reason. Bye coverage is answered by re-running
 `buildLineup` against the roster minus that week — never by counting positions,
-which gets the superflex OP slot wrong — and holes are measured against the
-lineup's existing gaps so a half-drafted roster doesn't report a catastrophe.
+which gets the superflex OP slot wrong — and holes are the slots the bye takes
+away, so a half-drafted roster doesn't report a catastrophe. The board's clash
+count is scoped to the player's own position (`byeCounts.at`), because only
+players at that position could have covered the slot; a roster-wide count
+flagged every row with a number that meant nothing.
 
 **Team entities are synthetic.** D/ST and head coaches have negative ids and no
 athlete record behind them. Ask `isTeamEntity(id)` from `data/proTeams.ts` — never

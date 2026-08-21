@@ -34,10 +34,10 @@ export interface PlayerRowProps {
    */
   room?: number
   /**
-   * How many players we *already own* share this player's bye week — the cost
-   * of adding one more, not a property of the player. Passed pre-counted as a
-   * number so `memo` still holds: it moves only when we win someone off that
-   * same week.
+   * How many players we *already own at this position* share this player's
+   * bye week — the cost of adding one more, not a property of the player.
+   * Passed pre-counted as a number so `memo` still holds: it moves only when
+   * we win someone at the same position off the same week.
    */
   byeClash?: number
   scout?: ScoutReport
@@ -131,7 +131,7 @@ export const PlayerRow = memo(function PlayerRow({
                 and it's the second thing you ask once you know a player is
                 available: not just what they cost, but which week they cost
                 you a starter. */}
-            <ByeChip week={player.byeWeek} clash={byeClash} />
+            <ByeChip week={player.byeWeek} position={player.position} clash={byeClash} />
             {player.injured && <span className="injury" title={player.injuryStatus ?? 'Injured'}>!</span>}
             {/* "Mine" keeps a badge because it carries the price. "Gone" is
                 pure state, so the name is struck through instead. */}

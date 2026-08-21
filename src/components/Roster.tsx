@@ -99,15 +99,24 @@ function ByePlan({ loads }: { loads: ByeWeekLoad[] }) {
  * refill a starting slot that week, however many players are out. Everything
  * else is reported plainly, because a bye you can cover is not a problem and
  * should not be dressed as one.
+ *
+ * The uncovered slots are *named* rather than counted, because the count alone
+ * doesn't tell you what to do about it. "RB×2 uncovered" says go buy a back;
+ * "2 starting slots uncovered" sends you back to the lineup to work out which.
  */
 function describeLoad(load: ByeWeekLoad): string {
-  if (load.holes > 0) {
-    return `${load.holes} starting ${load.holes === 1 ? 'slot' : 'slots'} uncovered`
-  }
+  if (load.holes > 0) return `${countSlots(load.uncovered)} uncovered`
   if (load.starters > 0) {
     return `${load.starters} ${load.starters === 1 ? 'starter' : 'starters'} out · bench covers`
   }
   return `${load.players.length} on the bench out`
+}
+
+/** `['RB', 'RB', 'OP']` → `RB×2, OP`, in the order the lineup lists them. */
+function countSlots(labels: string[]): string {
+  const counts = new Map<string, number>()
+  for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1)
+  return [...counts].map(([label, n]) => (n > 1 ? `${label}×${n}` : label)).join(', ')
 }
 
 function RosterRow({ row, bench, uncovered }: {

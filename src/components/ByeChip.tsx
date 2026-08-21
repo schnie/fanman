@@ -1,5 +1,6 @@
 /**
- * A player's bye week, flagged when it's a week we're already thin in.
+ * A player's bye week, flagged when it's a week we're already thin at their
+ * position.
  *
  * Shared by the board and the roster deliberately: it's the same fact about
  * the same person, and the two tabs get read one after the other — a chip that
@@ -12,11 +13,18 @@
  */
 export function ByeChip({
   week,
+  position,
   clash,
   uncovered,
 }: {
   week?: number
-  /** Board: how many players we already own are off that same week. */
+  /** Board: what the clash count is counting, so the tooltip can name it. */
+  position?: string
+  /**
+   * Board: how many players we already own *at this position* are off that
+   * same week. Position-scoped because that's who could have covered the slot
+   * — see `domain/byes.ts`.
+   */
   clash?: number
   /** Roster: that week leaves a starting slot we can't fill from the bench. */
   uncovered?: boolean
@@ -31,7 +39,7 @@ export function ByeChip({
         uncovered
           ? `Off in week ${week} — that week leaves a starting slot uncovered`
           : stacked
-            ? `Off in week ${week} — ${clash} of your players already are`
+            ? `Off in week ${week} — so ${clash === 1 ? 'is' : 'are'} ${clash} of your ${position ?? 'player'}s`
             : `Off in week ${week}`
       }
     >

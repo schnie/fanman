@@ -339,27 +339,29 @@ describe('draft board end to end', () => {
     const adapter = new FakeAdapter()
     adapter.fetchRankings = async () => [
       { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
-      { ...player(2, 'Puka Nacua', 2, 'WR'), byeWeek: 5 },
-      { ...player(3, 'Josh Allen', 3, 'QB'), byeWeek: 9 },
+      { ...player(2, 'Bijan Robinson', 2), byeWeek: 5 },
+      { ...player(3, 'Josh Allen', 3, 'QB'), byeWeek: 5 },
       { ...player(4, 'Ladd McConkey', 4, 'WR') }, // no bye fetched for him
     ]
     adapter.draft = {
       settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
-      log: [{ playerId: 2, status: 'mine', price: 30, at: 0 }], // Nacua, off in week 5
+      log: [{ playerId: 2, status: 'mine', price: 30, at: 0 }], // Robinson, RB, week 5
     }
     render(<App adapter={adapter} />)
     await findRow('Jahmyr Gibbs')
 
-    // Gibbs shares Nacua's week, so the chip carries the count that makes him
-    // the more expensive buy than his price says.
+    // Gibbs is a back sharing a back's week, so the chip carries the count
+    // that makes him a more expensive buy than his price says.
     const gibbs = getRow('Jahmyr Gibbs').closest('.row')!
     const chip = gibbs.querySelector('.row-bye')!
     expect(chip.textContent).toBe('Bye 5+1')
     expect(chip.className).toContain('clash')
 
-    // A week we own nobody in is stated, not flagged.
+    // Allen shares the same week but plays a position we own nobody at, so
+    // there is nothing to warn about: no back was ever going to cover for a
+    // quarterback. Stated, not flagged.
     const allen = getRow('Josh Allen').closest('.row')!
-    expect(allen.querySelector('.row-bye')!.textContent).toBe('Bye 9')
+    expect(allen.querySelector('.row-bye')!.textContent).toBe('Bye 5')
     expect(allen.querySelector('.row-bye')!.className).not.toContain('clash')
 
     // And an unknown bye says nothing at all rather than inventing a week.
@@ -392,9 +394,11 @@ describe('draft board end to end', () => {
     // Week 5 takes both starters with nobody behind them; week 9 takes one.
     const weeks = [...document.querySelectorAll('.bye-plan-row')].map((r) => r.textContent)
     expect(weeks[0]).toContain('Wk 5')
-    expect(weeks[0]).toContain('2 starting slots uncovered')
+    // Named, not counted: the slots that go dark say what to go shopping for.
+    expect(weeks[0]).toContain('RB, WR uncovered')
     expect(weeks[0]).toContain('Jahmyr Gibbs, Puka Nacua')
     expect(weeks[1]).toContain('Wk 9')
+    expect(weeks[1]).toContain('QB uncovered')
 
     // The same verdict reaches the player it's about, so you don't have to
     // hold the week in your head while reading down the lineup.

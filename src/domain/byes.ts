@@ -9,10 +9,16 @@ export interface ByeWeekLoad {
   /** How many of them hold a starting slot in the lineup as it stands today. */
   starters: number
   /**
-   * Starting slots that stay empty that week *after* the bench has been
-   * shuffled in. This is the number that answers "can I still field a team?",
-   * and it is not the same as `starters`: three starters out with three
-   * eligible bench players behind them costs nothing.
+   * The *labels* of the starting slots that stay empty that week once the
+   * bench has been shuffled in — `['RB', 'RB', 'OP']`. Which slots go dark is
+   * the actionable half: it names the position to go shopping for, where a
+   * bare count only says something is wrong.
+   */
+  uncovered: string[]
+  /**
+   * `uncovered.length`, kept as its own field because it's what the wording
+   * and the flagging branch on and re-deriving a length at three call sites
+   * invites one of them to drift.
    */
   holes: number
 }
@@ -22,14 +28,16 @@ export interface ByeWeekLoad {
  *
  * The coverage question is answered by re-running the lineup builder against
  * the roster minus that week's byes, rather than by counting positions by
- * hand. That reuses the one place that knows this league's slots — the
- * superflex-shaped OP slot especially, where a spare QB really can cover a
- * missing running back and a hand-rolled count would say otherwise.
+ * hand. That reuses the one place that knows this league's slots, and it is
+ * what makes the answer position-aware for free: backs on bye can only ever
+ * empty back-shaped slots, so a week full of missing receivers never reports a
+ * quarterback problem. The superflex-shaped OP slot is the reason this can't
+ * be a positional tally — a spare QB really can cover a missing back there,
+ * and only the lineup builder knows it.
  *
- * Holes are measured *against the roster's existing gaps*. Mid-draft the
- * lineup is mostly empty, so the raw count of unfilled starting slots in the
- * bye-week lineup would report a catastrophe every time; what's wanted is only
- * the slots the bye itself takes away.
+ * Holes are the slots the bye *takes away*: only slots the roster fills today
+ * can be lost. Mid-draft the lineup is mostly empty, and counting every
+ * unfilled slot in the bye-week lineup would report a catastrophe every time.
  */
 export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number): ByeWeekLoad[] {
   const base = buildLineup(won, byId, slots)
@@ -52,6 +60,16 @@ export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number):
     const available = won.filter((pick) => byId.get(pick.playerId)?.byeWeek !== week)
     const weekLineup = buildLineup(available, byId, slots)
 
+    // Same slot list in both lineups, so a slot filled today and empty that
+    // week is a slot the bye cost us. A shrinking pool never fills a slot it
+    // couldn't fill before, so this is exactly the damage and never more.
+    const filledThatWeek = new Set(
+      weekLineup.starters.filter((row) => row.pick).map((row) => row.key),
+    )
+    const uncovered = base.starters
+      .filter((row) => row.pick && !filledThatWeek.has(row.key))
+      .map((row) => row.label)
+
     loads.push({
       week,
       players: [...out]
@@ -59,7 +77,8 @@ export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number):
         .map((pick) => byId.get(pick.playerId))
         .filter((p): p is Player => Boolean(p)),
       starters: out.filter((pick) => startingIds.has(pick.playerId)).length,
-      holes: Math.max(0, weekLineup.openStarters - base.openStarters),
+      uncovered,
+      holes: uncovered.length,
     })
   }
 
@@ -69,18 +88,31 @@ export function byeLoads(won: Pick[], byId: Map<number, Player>, slots: number):
 }
 
 /**
- * How many of our players are already off in each week.
+ * How many players we already own are off in a given week *at a given
+ * position*.
  *
- * Deliberately a plain count rather than a `ByeWeekLoad`: the board asks this
- * once per row, for a week the player might not even share with us, and a
- * lineup rebuild per row would be paid ~230 times on every pick.
+ * Position-scoped on purpose. A bye hurts when the slot behind it can't be
+ * refilled, and the players who refill a slot are the ones who play that
+ * position — so three receivers off in week 8 say nothing about the
+ * quarterback you're bidding on, and counting them would flag every row on the
+ * board with a number that means nothing. Total damage for a week is the
+ * roster tab's job, where the lineup builder can answer it properly.
  */
-export function byeCounts(won: Pick[], byId: Map<number, Player>): Map<number, number> {
-  const counts = new Map<number, number>()
+export interface ByeCounts {
+  at(position: string, week: number): number
+}
+
+export function byeCounts(won: Pick[], byId: Map<number, Player>): ByeCounts {
+  const counts = new Map<string, number>()
+
   for (const pick of won) {
-    const week = byId.get(pick.playerId)?.byeWeek
-    if (week === undefined) continue
-    counts.set(week, (counts.get(week) ?? 0) + 1)
+    const player = byId.get(pick.playerId)
+    if (player?.byeWeek === undefined) continue
+    const key = `${player.position}|${player.byeWeek}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
   }
-  return counts
+
+  return {
+    at: (position, week) => counts.get(`${position}|${week}`) ?? 0,
+  }
 }
