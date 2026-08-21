@@ -96,6 +96,29 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   }, [players, draft.picks])
 
   const [tab, setTab] = useState<Tab>('board')
+  /**
+   * Switching tabs lands you at the top of the pane you asked for.
+   *
+   * The panels are hidden rather than unmounted, so the document keeps one
+   * scroll offset across all of them: leave it alone and tapping "My team"
+   * from 900px down the board opens the roster mid-list, usually past its end
+   * and clamped somewhere arbitrary. It reads as the app having lost your
+   * place, which is exactly backwards — the offset it kept was the *other*
+   * tab's.
+   *
+   * Unconditional, so tapping the tab you're already on is also a way back to
+   * the top — the familiar phone idiom, and it costs nothing to honour here.
+   *
+   * Instant, never smooth: the pane has already swapped underneath by the
+   * time the scroll would animate, so you'd watch a few hundred milliseconds
+   * of a list you didn't ask to see. `ScrollTopButton` animates because there
+   * the journey *is* the content staying put.
+   */
+  const selectTab = useCallback((next: Tab) => {
+    setTab(next)
+    // jsdom has no scrolling; guarded the same way `useScrollAnchor` is.
+    if (typeof window.scrollTo === 'function') window.scrollTo({ top: 0 })
+  }, [])
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('ALL')
   const [hideTaken, setHideTaken] = useState(true)
@@ -405,7 +428,7 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
 
       <nav className="tabs">
         {TABS.map(([id, label]) => (
-          <button key={id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+          <button key={id} className={tab === id ? 'on' : ''} onClick={() => selectTab(id)}>
             {label}
           </button>
         ))}

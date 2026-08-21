@@ -134,6 +134,15 @@ bytes free; it could not make the elements come back. So they render inside
 `display` would outrank — silently stacking the two panels. Settings is
 deliberately still unmounted: no images, nothing to preserve.
 
+One document, one scroll offset. Because the panels stay mounted, the browser
+has no per-tab scroll position to restore — so `selectTab` scrolls to the top
+on every tab tap, instantly. Without it, tapping "My team" from deep in the
+board opens the roster past its own end, which reads as the app losing your
+place when in fact it kept the *other* tab's. It fires even when the tab
+doesn't change, which is the phone idiom for "back to the top". `src/test/setup.ts`
+replaces jsdom's `scrollTo` with a no-op so the suite isn't buried in its
+"Not implemented" notice; tests that assert on scrolling stub it themselves.
+
 Mounting is only half of it, and the halves are easy to separate by accident.
 A lazy image in a hidden subtree *never* begins loading — it can never be near
 the viewport — so the roster passes `loading="eager"` to `PlayerAvatar` while
