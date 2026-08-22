@@ -1,4 +1,14 @@
-import type { DraftState, Player, PlayerProfile, ScoutReport, Scoring } from '../domain/types'
+import type { ChatDelta, ChatRequest } from './chat'
+import type {
+  ChatTurn,
+  DraftState,
+  Player,
+  PlayerProfile,
+  ScoutReport,
+  Scoring,
+} from '../domain/types'
+
+export type { ChatDelta, ChatRequest }
 
 export interface CachedRankings {
   players: Player[]
@@ -48,4 +58,27 @@ export interface DataAdapter {
    */
   loadScoutReports(): Promise<ScoutReport[]>
   saveScoutReports(reports: ScoutReport[]): Promise<void>
+
+  /**
+   * One answer, streamed.
+   *
+   * The only method here that isn't a `Promise`, and it has to be: a chat that
+   * arrives in one lump after twenty seconds is unusable on draft day, where
+   * the value of an answer decays by the second. An async iterable rather than
+   * a callback so a fake adapter can be an async generator yielding scripted
+   * deltas — which is what keeps `App.dom.test.tsx` driving the real chat UI
+   * with no network.
+   *
+   * Rejects with a `ScoutError`, same taxonomy as `scoutPlayer`: same client,
+   * same account, same things that go wrong.
+   */
+  chat(req: ChatRequest): AsyncIterable<ChatDelta>
+
+  /**
+   * The transcript survives a refresh, for the same reason scout reports do:
+   * every turn in it was paid for, and losing the thread mid-draft to a stray
+   * reload is the expensive failure. Cleared with the draft.
+   */
+  loadChat(): Promise<ChatTurn[]>
+  saveChat(turns: ChatTurn[]): Promise<void>
 }

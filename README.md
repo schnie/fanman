@@ -16,6 +16,8 @@ npm run dev:lan      # also serve on the LAN, to poke at it from a phone
 npm test             # full suite, offline
 npm run check        # typecheck + tests + lint
 npm run test:live    # hits ESPN for real — run this before draft day
+npm run test:scout   # a real, billed Claude call (needs ANTHROPIC_API_KEY)
+npm run test:chat    # three real, billed chat turns (needs ANTHROPIC_API_KEY)
 ```
 
 ## Layout
@@ -24,7 +26,7 @@ npm run test:live    # hits ESPN for real — run this before draft day
 src/
   domain/       types + budget math (pure, no I/O, heavily tested)
   data/         DataAdapter interface, ESPN client, browser implementation
-  components/   BudgetBar, NextMove, PlayerRow, BidSheet, Roster, SettingsPane
+  components/   BudgetBar, NextMove, PlayerRow, BidSheet, Roster, ChatPane, SettingsPane
   useDraft.ts   draft state, persistence, rankings fetch/cache
   App.tsx       composition + navigation
 ```
@@ -226,6 +228,44 @@ ignored — it will read JSON out of a code fence or out of surrounding prose �
 so the scout works either way, but the live test is how you find out which path
 you are on.
 
+## Ask
+
+A chat tab that can see your whole draft. Ask it what you're weak at, what a
+player is worth in *this* room, whether a bye week is a problem, or what's
+happened to someone this week.
+
+**It is pre-loaded, not asked to go looking.** Every question ships with the
+full ranking board, your roster and lineup, your budget and max bid, the room's
+inflation figure, every bye week your roster touches, and an explicit list of
+who is already off the board. So "who's the best back left" is a question it
+answers by reading, not by guessing — and it cannot suggest someone who went
+twenty minutes ago, because it was told exactly who went. It searches the web
+only for things the board cannot know: an injury, a depth-chart change, a trade
+from this week.
+
+It is the same single-call shape as the scout — `src/data/chat.ts`, no backend,
+web search running server-side — but streamed, so the answer starts appearing
+immediately rather than after twenty seconds of nothing.
+
+**What it is told it may not do.** It cannot suggest a bid above your max bid,
+which is a hard number: the most you can spend and still afford $1 for every
+remaining roster spot. It cannot present one of our own derived values (the
+`~$3` head-coach estimates) as a number ESPN published. And it cannot say
+anything about a *named* opponent, because the draft log records that a player
+is gone and never who bought them — so the most it can honestly say is what a
+typical rival can still bid. `npm run test:chat` checks all three against the
+real model.
+
+**It costs money per question.** Each one is a billed call, and the tab shows a
+running count. The board is re-sent every time, so it sits behind a prompt
+cache with a one-hour lifetime — repeat questions during a draft re-read it at
+about a tenth of the price. Only the last few exchanges go back to the model;
+the transcript on screen keeps everything.
+
+Answers are Claude's, not ESPN's, and the tab says so on every one of them.
+Check anything load-bearing before you spend $60 on it. The transcript survives
+a reload and is cleared when you reset the draft.
+
 ## Offline
 
 The app is a PWA: `vite-plugin-pwa` precaches the entire shell (~380KB), so
@@ -348,7 +388,7 @@ Do this the night before, not in the parking lot:
 Working: board, search, position and FLEX filters, cross-off, win-with-bid,
 budget math, undo, positional roster with bench divider, bye weeks on both
 tabs with bench-coverage warnings, head coaches with FPI-derived values,
-settings, persistence, offline fallback, the scout, player profiles, and a
-GitHub Pages deploy.
+settings, persistence, offline fallback, the scout, player profiles, the Ask
+tab, and a GitHub Pages deploy.
 
 Next: rehearse a full mock draft on the phone.

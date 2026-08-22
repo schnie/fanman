@@ -1693,6 +1693,190 @@ hr {
   -webkit-text-security: disc;
 }
 
+/* ---------- ask (draft chat) ---------- */
+
+/*
+ * Every class here is `chat-`-prefixed, like the rest of the sheet. A generic
+ * `.text` or `.sources` 1600 lines in wins the cascade for components that
+ * never heard of this feature, and passes both the build and the tests.
+ */
+
+.chat {
+  padding: 14px 14px 0;
+}
+
+.chat-intro {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-openers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.chat-opener {
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+
+.chat-opener:active {
+  background: var(--surface-2);
+}
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-turn {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* The question, as a bubble on the right — the one convention people already
+   know from every other chat, so it needs no label. */
+.chat-turn.user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 9px 13px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--surface-2);
+}
+
+/*
+ * The answer is full-width and labelled. The rest of the app is careful about
+ * whether a number came from ESPN or from us, and this is the one surface
+ * where every word is a model's — so the attribution rides on each turn rather
+ * than on a note at the bottom of a transcript you have already scrolled past.
+ */
+.chat-turn.assistant::before {
+  content: attr(data-label);
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.chat-turn.failed {
+  color: var(--red);
+  font-size: 14px;
+}
+
+.chat-text {
+  margin: 0;
+  /* The model is told to answer in plain text, and paragraph breaks are the
+     one bit of structure it is allowed. Preserve them rather than shipping a
+     markdown renderer for two newlines. */
+  white-space: pre-wrap;
+}
+
+.chat-searched {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-sources a {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(47, 129, 247, 0.35);
+}
+
+.chat-waiting {
+  margin: 0;
+  color: var(--muted);
+  /* Borrowed from the scout chip, deliberately: one idea of what "waiting"
+     looks like across the app. */
+  animation: scout-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-foot {
+  /* Clears the sticky compose box and the tab bar under it, so following a
+     streaming answer doesn't park the last line behind either. */
+  scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom));
+}
+
+.chat-retry {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Sticky so a long transcript never means scrolling back down to type. The
+   offset clears the fixed tab bar (60px plus its safe-area padding). */
+.chat-compose {
+  position: sticky;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 10px 0;
+  background: var(--bg);
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.chat-input:disabled {
+  color: var(--muted);
+}
+
+.chat-send {
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.chat-send:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
+.chat-note {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* A reveal and a pulse are both motion; neither is load-bearing. */
 @media (prefers-reduced-motion: reduce) {
   .row-detail {
@@ -1700,6 +1884,10 @@ hr {
   }
 
   .sk {
+    animation: none;
+  }
+
+  .chat-waiting {
     animation: none;
   }
 }

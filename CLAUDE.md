@@ -29,24 +29,30 @@ Opt-in, **not** part of `check` — they leave the machine, and two of them cost
 npm run test:live      # FANMAN_LIVE=1, hits ESPN's real endpoint (free)
 npm run test:profile   # FANMAN_LIVE=1, hits ESPN's athlete API (free)
 ANTHROPIC_API_KEY=… npm run test:scout   # a real, billed Claude call with web search
+ANTHROPIC_API_KEY=… npm run test:chat    # three real, billed chat turns
 ```
 
 The live tests are canaries for an upstream endpoint changing shape — exactly what
 fixture-based tests cannot catch. Run `test:live` before draft day. Don't run
-`test:scout` casually.
+`test:scout` or `test:chat` casually. `test:chat` is the only place the prompt's
+hard rules are checked against the real model rather than against the string we
+built — it asks for a bid with a $7 ceiling and fails if any figure named
+exceeds it.
 
 ## Layout
 
 ```
 src/
-  domain/       pure logic, no I/O — types, budget, lineup, market, nomination
+  domain/       pure logic, no I/O — types, budget, lineup, market, nomination,
+                chatContext (the draft, serialised for a model)
   data/         DataAdapter interface + browser implementation, ESPN/FPI/Anthropic clients
   components/   presentational; state comes down as props
   useDraft.ts   draft state, persistence, rankings fetch/cache
   useScout.ts   the billed news-check queue
   useProfile.ts free ESPN bio/stat fetch, follows the open row
+  useChat.ts    the billed Ask tab — transcript, streaming, spend
   App.tsx       composition, tabs, filters, modal state
-  App.css       one global sheet (~1150 lines); index.css holds resets/tokens
+  App.css       one global sheet (~1330 lines); index.css holds resets/tokens
   test/         factories.ts (builders) + setup.ts
 ```
 
@@ -132,6 +138,59 @@ passes an unparseable body through as the message, so on venue wifi a captive
 portal's HTML arrives by the same route as the JSON did. Billing is matched
 before the status ladder, because an exhausted balance arrives as a plain 400 and
 "bad request" is true, useless, and unactionable.
+
+**The Ask tab is one Messages API call, not an agent framework.** The Claude
+Agent SDK is Node-only — it spawns a CLI subprocess and its value is built-in
+filesystem tools — so it cannot run in the browser, and adopting it would mean
+a backend, which would mean holding the user's key. Don't. The agentic part we
+actually want (search the web, decide when to stop) already runs server-side
+through `web_search`, exactly as the scout uses it. `data/chat.ts` is
+`scoutPlayer` minus the schema, plus history and streaming.
+
+**The chat context is split by rate of change, and that split is the caching.**
+`domain/chatContext.ts` returns `reference` (league rules and the whole ~230-row
+board, which moves only on a rankings refetch) and `live` (budget, roster,
+market, the log — which moves on every pick). `reference` carries the cache
+breakpoint with a 1h TTL, because draft-day questions are minutes apart and the
+default five minutes would miss nearly every time. **Nothing clock-dependent
+may enter `reference`**: a timestamp in a cached prefix changes the prefix every
+turn, the cache silently never hits again, and nothing in the UI would say so.
+`chatContext.test.ts` asserts byte-identity across calls to keep that honest.
+
+The whole board goes in rather than a top-N slice. It is ~3.5K tokens; trimming
+it saves a rounding error and costs every answer about the back half of the
+draft, which is where a $1 bid actually needs help. What is *not* left to
+inference is availability — everyone already taken is listed explicitly in
+`live`, because suggesting a player who went twenty minutes ago is the one
+failure that makes the feature worse than not having it.
+
+**The chat is the one surface where every word is a model's.** The rest of the
+app is careful about whether a number came from ESPN or from us; here nothing
+did. So the attribution rides on each assistant turn (`data-label` →
+`.chat-turn.assistant::before`) rather than on a note under a transcript you
+have already scrolled past, and the system prompt restates the `~`-means-ours
+rule, the max-bid ceiling and the no-named-rivals rule that
+`domain/nomination.ts` exists to protect. Those three are asserted in
+`chatContext.test.ts` and again, against the real model, in `chat.live.test.ts`.
+
+**Chat calls cost money, and the double-billing hazard is a different one than
+the scout's.** There is nothing to de-duplicate — every question is new — so
+the risk is not a repeated call but a doubled one. Never start a call from
+inside a `setState` updater: React may invoke an updater more than once per
+update and does so deliberately under StrictMode. `useChat` reads the
+transcript through `turnsRef` and claims `busy.current` synchronously in
+`send`, before `run` is reached, so two taps in one tick cannot both pay. Only
+the last `HISTORY_TURNS` go back to the API; the transcript on screen is never
+trimmed, only what we pay to re-read.
+
+**`chat()` is the only `DataAdapter` method that isn't a `Promise`.** It returns
+an `AsyncIterable` because an answer that arrives in one lump after twenty
+seconds is unusable in a room counting down, and because an async generator is
+what lets `App.dom.test.tsx` script an exact delta sequence — including a
+failure part-way through an answer — with no network. It rejects with
+`ScoutError`: same client, same account, same failure taxonomy, and
+`scoutError.ts` already describes those kinds as part of the seam rather than
+as something private to the scout.
 
 **Profiles are free, so they get the opposite policy.** `useProfile` fetches on
 row open only, caches for six hours, and evicts at 150 entries. It's a latency
@@ -248,11 +307,12 @@ copy of the whole suite and reports passes from code you aren't changing.
   That's the intended way to test a flow — prefer it to mounting a component in
   isolation with mocked props.
 - Every live test gates on `FANMAN_LIVE`, which only the `test:live` /
-  `test:profile` / `test:scout` scripts set. So `npm test` stays offline, CI
-  never touches ESPN, and an exported `ANTHROPIC_API_KEY` on its own can never
-  buy a scout report — spending money takes the deliberate act. The scout check
-  needs the key *in addition*, and fails loudly rather than skipping green when
-  you ask for it without one. Don't weaken either half of that gate.
+  `test:profile` / `test:scout` / `test:chat` scripts set. So `npm test` stays
+  offline, CI never touches ESPN, and an exported `ANTHROPIC_API_KEY` on its own
+  can never buy a scout report or a chat turn — spending money takes the
+  deliberate act. Both billed checks need the key *in addition*, and fail loudly
+  rather than skipping green when you ask for one without it. Don't weaken
+  either half of that gate.
 
 ## Types & tooling
 

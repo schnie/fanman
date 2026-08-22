@@ -5,6 +5,7 @@ import type { AppUpdates } from './lib/appUpdate'
 import { useDraft, useRankings } from './useDraft'
 import { useScout } from './useScout'
 import { useProfile } from './useProfile'
+import { useChat } from './useChat'
 import { BudgetBar } from './components/BudgetBar'
 import { PlayerRow } from './components/PlayerRow'
 import { BidSheet } from './components/BidSheet'
@@ -12,6 +13,7 @@ import { Roster } from './components/Roster'
 import { SettingsPane } from './components/SettingsPane'
 import { ScrollTopButton } from './components/ScrollTopButton'
 import { NextMove } from './components/NextMove'
+import { ChatPane } from './components/ChatPane'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
 import { useHeadHeight } from './lib/useHeadHeight'
@@ -22,6 +24,8 @@ import { byeCounts } from './domain/byes'
 import { wonPicksFrom } from './domain/budget'
 import { displayRoomPrice, summarizeMarket } from './domain/market'
 import { suggestNomination } from './domain/nomination'
+import { buildChatContext } from './domain/chatContext'
+import { teamAbbr } from './data/proTeams'
 import type { Player } from './domain/types'
 import './App.css'
 
@@ -29,6 +33,7 @@ import './App.css'
 const TABS = [
   ['board', 'Board'],
   ['roster', 'My team'],
+  ['ask', 'Ask'],
   ['settings', 'Settings'],
 ] as const
 type Tab = (typeof TABS)[number][0]
@@ -93,6 +98,29 @@ export default function App({
       }),
     [players, draft.picks, draft.summary, draft.state.settings, market],
   )
+
+  /**
+   * The draft, written out for the chat — but only when a question is actually
+   * sent. Serialising ~230 board rows on every pick to answer a question
+   * nobody asked would be the most expensive thing in the app, so this is a
+   * thunk and `useChat` calls it at send time.
+   */
+  const buildContext = useCallback(
+    () =>
+      buildChatContext({
+        players,
+        picks: draft.picks,
+        summary: draft.summary,
+        settings: draft.state.settings,
+        market,
+        advice,
+        teamAbbr,
+      }),
+    [players, draft.picks, draft.summary, draft.state.settings, market, advice],
+  )
+
+  // Same key as the scout, read once by that hook rather than twice.
+  const chat = useChat(adapter, buildContext, scout.hasKey && online, online)
 
   /**
    * How many of our players are off in each week. Computed once for the board
@@ -206,13 +234,17 @@ export default function App({
     [clearPlayer],
   )
 
-  // A new draft should not inherit the previous one's news.
+  // A new draft should not inherit the previous one's news — or the previous
+  // one's conversation, every line of which is about a roster that no longer
+  // exists.
   const { resetDraft } = draft
   const { clearReports } = scout
+  const { clearChat } = chat
   const resetAll = useCallback(() => {
     resetDraft()
     clearReports()
-  }, [resetDraft, clearReports])
+    clearChat()
+  }, [resetDraft, clearReports, clearChat])
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -404,6 +436,24 @@ export default function App({
           slots={draft.state.settings.slots}
         />
       </div>
+
+      {/* Unmounted between tabs, like Settings and unlike the two panels
+          above: there are no images here, so there are no decoded pixels to
+          throw away. The transcript lives in `useChat`, which is mounted at
+          this level, so leaving costs nothing but the scroll offset — and
+          `selectTab` resets that anyway. */}
+      {tab === 'ask' && (
+        <ChatPane
+          turns={chat.turns}
+          streaming={chat.streaming}
+          searching={chat.searching}
+          calls={chat.calls}
+          hasKey={scout.hasKey}
+          online={online}
+          onSend={chat.send}
+          onRetry={chat.retry}
+        />
+      )}
 
       {tab === 'settings' && (
         <SettingsPane
