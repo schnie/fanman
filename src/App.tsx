@@ -408,7 +408,7 @@ export default function App({
               // Crossing off opens the keypad: the sale price is what keeps
               // the room's remaining money honest. Skippable in one tap.
               onPrice={openSold}
-              room={displayRoomPrice(p, market.inflation)}
+              room={displayRoomPrice(p, market.inflation, draft.state.settings.scoring)}
               scoring={draft.state.settings.scoring}
               // Scoped to the player's own position: receivers on bye say
               // nothing about the quarterback you're bidding on. Our own bye
@@ -498,7 +498,7 @@ export default function App({
           player={sheet.player}
           state={draft.state}
           mode={sheet.mode}
-          roomPrice={displayRoomPrice(sheet.player, market.inflation)}
+          roomPrice={displayRoomPrice(sheet.player, market.inflation, draft.state.settings.scoring)}
           marketVsBookPct={marketGap.get(sheet.player.position)}
           onCancel={() => setSheet(null)}
           onConfirm={(price) => {

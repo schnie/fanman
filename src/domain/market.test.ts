@@ -11,11 +11,17 @@ import {
 import { DEFAULT_SETTINGS, observedPrice, type Pick, type Player, type Settings } from './types'
 import { makePlayer } from '../test/factories'
 
+// Pinned to a one-QB book rather than inherited from DEFAULT_SETTINGS, which is
+// SUPERFLEX. Under superflex the pricing math anchors on `espnValue` instead of
+// `marketValue` (see `priceAnchor`), and these cases are about the inflation
+// model rather than about which column feeds it. The anchoring itself is tested
+// below, where the scoring is set deliberately.
 const settings = (over: Partial<Settings> = {}): Settings => ({
   ...DEFAULT_SETTINGS,
   budget: 200,
   slots: 17,
   teamCount: 12,
+  scoring: 'PPR',
   ...over,
 })
 
@@ -140,13 +146,13 @@ describe('the $1 floor', () => {
   it('leaves a minimum-bid player at $1 however hot the room gets', () => {
     // The failure this guards: a linear model claimed $1 filler would cost $3
     // late in a draft. You cannot bid below the minimum, and filler stays filler.
-    expect(roomPrice(makePlayer({ marketValue: 1 }), 3)).toBe(1)
-    expect(roomPrice(makePlayer({ marketValue: 2 }), 3)).toBe(4)
+    expect(roomPrice(makePlayer({ marketValue: 1 }), 3, 'PPR')).toBe(1)
+    expect(roomPrice(makePlayer({ marketValue: 2 }), 3, 'PPR')).toBe(4)
   })
 
   it('puts the surplus on the players people actually want', () => {
-    const cheap = roomPrice(makePlayer({ marketValue: 2 }), 2)!
-    const dear = roomPrice(makePlayer({ marketValue: 50 }), 2)!
+    const cheap = roomPrice(makePlayer({ marketValue: 2 }), 2, 'PPR')!
+    const dear = roomPrice(makePlayer({ marketValue: 50 }), 2, 'PPR')!
     expect(cheap - 2).toBeLessThan(3)
     expect(dear - 50).toBeGreaterThan(40)
   })
@@ -162,15 +168,15 @@ describe('the $1 floor', () => {
 
 describe('roomPrice', () => {
   it('scales the market price by inflation', () => {
-    expect(roomPrice(makePlayer({ marketValue: 40 }), 1.3)).toBe(52)
+    expect(roomPrice(makePlayer({ marketValue: 40 }), 1.3, 'PPR')).toBe(52)
   })
 
   it('never drops a real player below the $1 minimum bid', () => {
-    expect(roomPrice(makePlayer({ marketValue: 1 }), 0.5)).toBe(1)
+    expect(roomPrice(makePlayer({ marketValue: 1 }), 0.5, 'PPR')).toBe(1)
   })
 
   it('returns nothing for a player ESPN does not price', () => {
-    expect(roomPrice(makePlayer({ espnValue: 0, marketValue: 0 }), 1.3)).toBeUndefined()
+    expect(roomPrice(makePlayer({ espnValue: 0, marketValue: 0 }), 1.3, 'PPR')).toBeUndefined()
   })
 })
 
@@ -187,15 +193,15 @@ describe('observedPrice', () => {
 describe('displayRoomPrice', () => {
   it('says nothing when the adjusted price matches the listed one', () => {
     // Otherwise the row shows "room $40" beside "$40", which is just noise.
-    expect(displayRoomPrice(makePlayer({ marketValue: 40 }), 1)).toBeUndefined()
+    expect(displayRoomPrice(makePlayer({ marketValue: 40 }), 1, 'PPR')).toBeUndefined()
   })
 
   it('reports the adjusted price when it actually differs', () => {
-    expect(displayRoomPrice(makePlayer({ marketValue: 40 }), 1.3)).toBe(52)
+    expect(displayRoomPrice(makePlayer({ marketValue: 40 }), 1.3, 'PPR')).toBe(52)
   })
 
   it('says nothing for a player ESPN never priced', () => {
-    expect(displayRoomPrice(makePlayer({ espnValue: 0, marketValue: 0 }), 1.3)).toBeUndefined()
+    expect(displayRoomPrice(makePlayer({ espnValue: 0, marketValue: 0 }), 1.3, 'PPR')).toBeUndefined()
   })
 })
 
@@ -241,7 +247,7 @@ describe('positionTier', () => {
   it('stops at the cliff in a real ladder', () => {
     // Steps run 97%, 97%, 95%, 91%, 97% and then fall to 80% at London. Six
     // names, and the boundary is where the board itself puts it.
-    const tier = positionTier(wrs, wrs[0])
+    const tier = positionTier(wrs, wrs[0], 'PPR')
     expect(tier.map((p) => p.name)).toEqual([
       "Ja'Marr Chase",
       'Puka Nacua',
@@ -254,34 +260,34 @@ describe('positionTier', () => {
 
   it('starts from the player asked about, not the top of the board', () => {
     // Below the cliff is its own tier: London and Rice keep 89% of each other.
-    expect(positionTier(wrs, wrs[6]).map((p) => p.name)).toEqual(['Drake London', 'Rashee Rice'])
+    expect(positionTier(wrs, wrs[6], 'PPR').map((p) => p.name)).toEqual(['Drake London', 'Rashee Rice'])
   })
 
   it('ignores other positions entirely', () => {
     // A cross-position ladder is effectively continuous, so a tier that let RBs
     // in would never find a boundary. The RB here sits mid-WR-tier by price.
     const rb = makePlayer({ id: 99, position: 'RB', marketValue: 50, espnValue: 50 })
-    expect(positionTier([...wrs, rb], wrs[0])).not.toContain(rb)
+    expect(positionTier([...wrs, rb], wrs[0], 'PPR')).not.toContain(rb)
   })
 
   it('yields just the player when nothing is close enough to be a substitute', () => {
     const alone = makePlayer({ id: 1, position: 'TE', marketValue: 40, espnValue: 40 })
     const far = makePlayer({ id: 2, position: 'TE', marketValue: 10, espnValue: 10 })
-    expect(positionTier([alone, far], alone)).toEqual([alone])
+    expect(positionTier([alone, far], alone, 'PPR')).toEqual([alone])
   })
 
   it('leads with the player even when he is not on the board', () => {
     // A player already crossed off is not in `available`; asking anyway must
     // not return an empty tier the caller would have to special-case.
     const gone = makePlayer({ id: 500, position: 'WR', marketValue: 60, espnValue: 60 })
-    expect(positionTier(wrs, gone)).toEqual([gone])
+    expect(positionTier(wrs, gone, 'PPR')).toEqual([gone])
   })
 
   it('caps a long flat run rather than walking the whole board', () => {
     const flat = Array.from({ length: 40 }, (_, i) =>
       makePlayer({ id: i + 1, position: 'QB', marketValue: 30 - i * 0.1, espnValue: 30 }),
     )
-    expect(positionTier(flat, flat[0])).toHaveLength(8)
+    expect(positionTier(flat, flat[0], 'PPR')).toHaveLength(8)
   })
 })
 
@@ -347,5 +353,66 @@ describe('marketVsBookPct', () => {
 
   it('says nothing about a position that is not on the board', () => {
     expect(marketVsBookPct(qbs(9, 25), 'SUPERFLEX', 'TE')).toBeUndefined()
+  })
+})
+
+describe('pricing under a format the market column does not share', () => {
+  // Real 2026 figures throughout: Hurts books at $46 and averages $11, Gibbs
+  // books at $57 and averages $65.
+  const hurts = makePlayer({ id: 1, name: 'Jalen Hurts', position: 'QB', espnValue: 46, marketValue: 11 })
+  const gibbs = makePlayer({ id: 2, name: 'Jahmyr Gibbs', position: 'RB', espnValue: 57, marketValue: 65 })
+
+  // The bug this fixes. `room $N` is titled "likely price in this room" — the
+  // app's own forecast, not an ESPN column with a caveat under it — and built
+  // on the market average it named $14 for a $46 quarterback.
+  it('prices a quarterback off the book, not off the one-QB average', () => {
+    expect(roomPrice(hurts, 1.256, 'SUPERFLEX')).toBe(58)
+    expect(roomPrice(hurts, 1.256, 'PPR')).toBe(14)
+  })
+
+  it('stops ranking a dearer market above a dearer book', () => {
+    // Gibbs drops from the $81 the market column produced to something near
+    // his book, so a $65 back no longer outprices a $46 quarterback by 6x.
+    expect(roomPrice(gibbs, 1.256, 'SUPERFLEX')).toBe(71)
+    expect(roomPrice(hurts, 1.256, 'SUPERFLEX')).toBeGreaterThan(
+      roomPrice(makePlayer({ espnValue: 40, marketValue: 60 }), 1.256, 'SUPERFLEX')!,
+    )
+  })
+
+  it('suppresses the adjustment against the number it was derived from', () => {
+    // At par the room price is the book, and repeating it beside the book adds
+    // nothing. Comparing against the market column instead would have shown
+    // "room $46" next to a $46 book at random inflation levels.
+    expect(displayRoomPrice(hurts, 1, 'SUPERFLEX')).toBeUndefined()
+    expect(displayRoomPrice(hurts, 1.256, 'SUPERFLEX')).toBe(58)
+  })
+
+  // A quarterback who sold for real money while we were not watching would be
+  // booked at his one-QB average, leaving the room holding cash it has spent.
+  it('estimates an unwatched sale from the book too', () => {
+    const board = [hurts, gibbs]
+    const picks = new Map<number, Pick>([[1, { playerId: 1, status: 'gone', price: 0, at: 0 }]])
+    const sf = summarizeMarket(board, picks, settings({ scoring: 'SUPERFLEX' }))
+    const ppr = summarizeMarket(board, picks, settings({ scoring: 'PPR' }))
+    expect(sf.spent).toBe(46)
+    expect(ppr.spent).toBe(11)
+  })
+
+  it('walks the tier ladder by the same number it prices with', () => {
+    // Two quarterbacks the book ranks one way and the market the other. Their
+    // books are $40 and $36 — inside the cliff, so a ladder built on the book
+    // holds both — while their market averages invert the order entirely.
+    const marketLeader = makePlayer({ id: 10, name: 'market leader', position: 'QB', espnValue: 36, marketValue: 20 })
+    const bookLeader = makePlayer({ id: 11, name: 'book leader', position: 'QB', espnValue: 40, marketValue: 12 })
+    const pool = [marketLeader, bookLeader]
+
+    expect(positionTier(pool, bookLeader, 'SUPERFLEX').map((p) => p.name)).toEqual([
+      'book leader',
+      'market leader',
+    ])
+    // On the market ordering the book leader sits below and leads no tier, so
+    // the substitute the nomination logic would have offered is a different
+    // player. Same board, same question, two answers — which is the point.
+    expect(positionTier(pool, bookLeader, 'PPR').map((p) => p.name)).toEqual(['book leader'])
   })
 })

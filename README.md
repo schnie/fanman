@@ -132,6 +132,16 @@ money onto them and off everyone else. Settings shows the QB figure, since it
 has no player in front of it. Nothing is hardcoded; this app runs once a year
 and a number written down in one August is wrong by the next.
 
+Everything the app *predicts* from a price — the `room $N` figure, the
+inflation model, the tier ladders, the nomination banner's "likely goes ~$N" —
+anchors on the book under superflex rather than on the market column. The
+market average is the better predictor whenever it shares the format, but here
+it does not, and a room price built on it forecast **$14 for Jalen Hurts**
+against a $46 book. `room $N` is the app speaking in its own voice, not an ESPN
+column with a caveat under it, so it has to be quoted in the format being
+drafted. On the live board that moves Hurts from $14 to $55 and Josh Allen from
+$39 to $70, while pulling the running backs slightly down (Gibbs $81 → $68).
+
 Because the two are quoted in different formats, the book-versus-market gap
 **is not computed under superflex**. Under a one-QB book that gap is the useful
 signal, showing where the market is paying over or under book; under superflex

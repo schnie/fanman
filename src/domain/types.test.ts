@@ -5,6 +5,7 @@ import {
   marketIsComparable,
   marketPremium,
   migrateSettings,
+  priceAnchor,
   isUnpriced,
   MARKET_TREND_THRESHOLD,
   type DraftState,
@@ -75,6 +76,32 @@ describe('marketIsComparable', () => {
     expect(marketIsComparable('PPR')).toBe(true)
     expect(marketIsComparable('STANDARD')).toBe(true)
     expect(marketIsComparable('SUPERFLEX')).toBe(false)
+  })
+})
+
+describe('priceAnchor', () => {
+  // Real 2026 figures. The market column is the better predictor when it is
+  // quoted in our format, because it is what people actually paid.
+  const hurts = player({ position: 'QB', espnValue: 46, marketValue: 11 })
+
+  it('prefers the observed market where it shares our format', () => {
+    expect(priceAnchor(hurts, 'PPR')).toBe(11)
+    expect(priceAnchor(hurts, 'STANDARD')).toBe(11)
+  })
+
+  // The regression this exists for: a room price built on $11 predicted Jalen
+  // Hurts would go for $14 in a league that starts two quarterbacks. That is
+  // not a caveated ESPN column, it is the app naming a price in its own voice.
+  it('falls back to the book where the market is quoted in another format', () => {
+    expect(priceAnchor(hurts, 'SUPERFLEX')).toBe(46)
+  })
+
+  // The deep bench: ESPN ranks nobody down there and publishes no book value,
+  // but the market still prices them. Anchoring those to zero would put every
+  // one of them at the $1 floor.
+  it('takes the market when there is no book value at all', () => {
+    const deep = player({ espnValue: 0, marketValue: 4.2 })
+    expect(priceAnchor(deep, 'SUPERFLEX')).toBe(4.2)
   })
 })
 

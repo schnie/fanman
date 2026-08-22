@@ -2,6 +2,7 @@ import {
   isUnpriced,
   marketIsComparable,
   observedPrice,
+  priceAnchor,
   type Pick,
   type Player,
   type Scoring,
@@ -116,17 +117,17 @@ const TIER_DEPTH = 8
  * counts as the same player with a cheaper name. `from` always leads the
  * result, so a board with no tier on it yields just him.
  */
-export function positionTier(available: Player[], from: Player): Player[] {
+export function positionTier(available: Player[], from: Player, scoring: Scoring): Player[] {
   const ladder = available
     .filter((p) => p.position === from.position)
-    .sort((a, b) => b.marketValue - a.marketValue)
+    .sort((a, b) => priceAnchor(b, scoring) - priceAnchor(a, scoring))
 
   const start = ladder.findIndex((p) => p.id === from.id)
   if (start < 0) return [from]
 
   const tier = [ladder[start]]
   for (let i = start; i + 1 < ladder.length && tier.length < TIER_DEPTH; i++) {
-    if (ladder[i + 1].marketValue < ladder[i].marketValue * TIER_CLIFF) break
+    if (priceAnchor(ladder[i + 1], scoring) < priceAnchor(ladder[i], scoring) * TIER_CLIFF) break
     tier.push(ladder[i + 1])
   }
   return tier
@@ -158,7 +159,11 @@ export function summarizeMarket(
       spent += seen
       observed++
     } else {
-      spent += byId.get(pick.playerId)?.marketValue ?? 0
+      // The anchor, not the market column: a quarterback who went for real
+      // money while we were not watching would otherwise be booked at his
+      // one-QB average, leaving the room holding cash it has already spent.
+      const p = byId.get(pick.playerId)
+      spent += p ? priceAnchor(p, settings.scoring) : 0
       estimated++
     }
   }
@@ -170,9 +175,9 @@ export function summarizeMarket(
   // value. Summing the whole board would count hundreds of players nobody
   // drafts and understate inflation badly.
   const available = availablePlayers(players, picks)
-    .sort((a, b) => b.marketValue - a.marketValue)
+    .sort((a, b) => priceAnchor(b, settings.scoring) - priceAnchor(a, settings.scoring))
     .slice(0, slotsLeft)
-  const valueLeft = available.reduce((sum, p) => sum + p.marketValue, 0)
+  const valueLeft = available.reduce((sum, p) => sum + priceAnchor(p, settings.scoring), 0)
 
   /**
    * The $1 floor. Every open roster spot must be filled and no bid can be
@@ -186,7 +191,10 @@ export function summarizeMarket(
    * it actually goes: on the players people still want.
    */
   const discretionaryMoney = Math.max(0, moneyLeft - slotsLeft)
-  const discretionaryValue = available.reduce((sum, p) => sum + Math.max(0, p.marketValue - 1), 0)
+  const discretionaryValue = available.reduce(
+    (sum, p) => sum + Math.max(0, priceAnchor(p, settings.scoring) - 1),
+    0,
+  )
 
   const raw = discretionaryValue > 0 ? discretionaryMoney / discretionaryValue : 1
   const inflation = clamp(raw, MIN_INFLATION, MAX_INFLATION)
@@ -210,10 +218,10 @@ export function summarizeMarket(
  * the sheet says. Undefined for anything ESPN doesn't price — we won't invent
  * a market number on top of a missing one.
  */
-export function roomPrice(player: Player, inflation: number): number | undefined {
+export function roomPrice(player: Player, inflation: number, scoring: Scoring): number | undefined {
   if (isUnpriced(player)) return undefined
   // Only the amount above the $1 minimum inflates.
-  return Math.max(1, Math.round(1 + (player.marketValue - 1) * inflation))
+  return Math.max(1, Math.round(1 + (priceAnchor(player, scoring) - 1) * inflation))
 }
 
 /**
@@ -221,9 +229,16 @@ export function roomPrice(player: Player, inflation: number): number | undefined
  * The rule lives here so the row, the bid sheet and the header cannot disagree
  * about when an adjustment is worth showing.
  */
-export function displayRoomPrice(player: Player, inflation: number): number | undefined {
-  const room = roomPrice(player, inflation)
-  if (room === undefined || room === Math.round(player.marketValue)) return undefined
+export function displayRoomPrice(
+  player: Player,
+  inflation: number,
+  scoring: Scoring,
+): number | undefined {
+  const room = roomPrice(player, inflation, scoring)
+  // Compared against the number it was derived from, which is the anchor and
+  // not always the market column. Suppressing on a match with a figure that
+  // never fed the calculation would hide the adjustment at random prices.
+  if (room === undefined || room === Math.round(priceAnchor(player, scoring))) return undefined
   return room
 }
 
