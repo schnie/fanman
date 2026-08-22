@@ -1603,6 +1603,251 @@ hr {
   -webkit-text-security: disc;
 }
 
+/* ---------- ask (draft chat) ---------- */
+
+/*
+ * Every class here is `chat-`-prefixed, like the rest of the sheet. A generic
+ * `.text` or `.sources` 1600 lines in wins the cascade for components that
+ * never heard of this feature, and passes both the build and the tests.
+ */
+
+.chat {
+  /* Bottom clears the fixed compose row; the tab bar under it is already
+     accounted for by `.app`. */
+  padding: 14px 14px 72px;
+}
+
+.chat-intro {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-openers {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.chat-opener {
+  padding: 9px 13px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+
+.chat-opener:active {
+  background: var(--surface-2);
+}
+
+.chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chat-turn {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* The question, as a bubble on the right — the one convention people already
+   know from every other chat, so it needs no label. */
+.chat-turn.user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 9px 13px;
+  border-radius: 14px 14px 4px 14px;
+  background: var(--surface-2);
+}
+
+/*
+ * The answer is full-width and labelled. The rest of the app is careful about
+ * whether a number came from ESPN or from us, and this is the one surface
+ * where every word is a model's — so the attribution rides on each turn rather
+ * than on a note at the bottom of a transcript you have already scrolled past.
+ */
+.chat-turn.assistant::before {
+  content: attr(data-label);
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.chat-turn.failed {
+  color: var(--red);
+  font-size: 14px;
+}
+
+.chat-text {
+  margin: 0;
+  /* The model is told to answer in plain text, and paragraph breaks are the
+     one bit of structure it is allowed. Preserve them rather than shipping a
+     markdown renderer for two newlines. */
+  white-space: pre-wrap;
+}
+
+/* A cut-off answer is still worth reading — the recommendation is in the first
+   sentence — but it must not sit there looking finished. */
+.chat-truncated {
+  margin: 6px 0 0;
+  color: var(--amber);
+  font-size: 12px;
+}
+
+.chat-searched {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chat-sources a {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(47, 129, 247, 0.35);
+}
+
+.chat-waiting {
+  margin: 0;
+  color: var(--muted);
+  /* Borrowed from the scout chip, deliberately: one idea of what "waiting"
+     looks like across the app. */
+  animation: scout-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-foot {
+  /* Clears the sticky compose box and the tab bar under it, so following a
+     streaming answer doesn't park the last line behind either. */
+  scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom));
+}
+
+/*
+ * A line under the conversation, not a message in it. The transcript stays;
+ * only what we re-send to the model is reset — see `sendableHistory`.
+ */
+.chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-divider::before,
+.chat-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.chat-retry {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/*
+ * Fixed, not sticky.
+ *
+ * Sticky left the box in normal flow until the transcript outgrew the
+ * viewport and only pinned it after that, so it lived in one of two places
+ * depending on how much had been said and visibly stepped between them
+ * mid-scroll. A compose box is chrome, like the tab bar it sits above, and
+ * chrome holds still.
+ *
+ * Centred to `.app`'s own width rather than spanning the viewport: at
+ * `left: 0; right: 0` it would run full-bleed on a desktop while the
+ * transcript above it stayed in a 720px column.
+ */
+.chat-compose {
+  position: fixed;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 720px);
+  /* Under the tab bar (30), over the transcript. */
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * The new-conversation idiom, kept to a square so the input beside it gets
+ * the rest of the row. Disabled rather than unmounted when there is nothing
+ * to divide — see the note in ChatPane.
+ */
+.chat-newtopic {
+  flex: 0 0 auto;
+  width: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chat-newtopic:disabled {
+  opacity: 0.4;
+}
+
+.chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.chat-input:disabled {
+  color: var(--muted);
+}
+
+.chat-send {
+  padding: 0 18px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.chat-send:disabled {
+  background: var(--surface-2);
+  color: var(--muted);
+}
+
 /* A reveal and a pulse are both motion; neither is load-bearing. */
 @media (prefers-reduced-motion: reduce) {
   .row-detail {
@@ -1610,6 +1855,10 @@ hr {
   }
 
   .sk {
+    animation: none;
+  }
+
+  .chat-waiting {
     animation: none;
   }
 }

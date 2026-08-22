@@ -30,6 +30,7 @@ export function SettingsPane({
   onReset,
   adapter,
   scoutCalls,
+  chatCalls,
   onKeyChange,
   updates,
   online,
@@ -41,6 +42,12 @@ export function SettingsPane({
   onReset: () => void
   adapter: DataAdapter
   scoutCalls: number
+  /**
+   * Questions asked in the Ask tab. Its meter lives here rather than under the
+   * compose box: mid-draft that space belongs to the next question, and this
+   * is already where the other billed thing keeps its count.
+   */
+  chatCalls: number
   onKeyChange: () => void
   /** Absent where there is no service worker to update — see `App`. */
   updates?: AppUpdates
@@ -156,6 +163,12 @@ export function SettingsPane({
         already waiting when a name is called. Each scout is a paid API call, so
         set 0 to only scout players you tap. <strong>{scoutCalls}</strong> run
         this session.
+      </div>
+
+      <div className="field-note">
+        Ask tab: <strong>{chatCalls}</strong> question{chatCalls === 1 ? '' : 's'} this
+        session. Each one is a paid call too, and re-sends the board — so it is
+        the other place this key spends money.
       </div>
 
       {updates && (

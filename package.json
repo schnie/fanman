@@ -15,6 +15,7 @@
     "test:profile": "FANMAN_LIVE=1 vitest run src/data/profile.live.test.ts",
     "check": "tsc -b && vitest run && oxlint",
     "test:scout": "FANMAN_LIVE=1 vitest run src/data/scout.live.test.ts",
+    "test:chat": "FANMAN_LIVE=1 vitest run src/data/chat.live.test.ts",
     "verify:build": "npm run build && node scripts/verify-build.mjs"
   },
   "dependencies": {

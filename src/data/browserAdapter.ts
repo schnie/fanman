@@ -1,8 +1,16 @@
-import type { CachedRankings, DataAdapter } from './adapter'
+import type { CachedRankings, ChatRequest, DataAdapter } from './adapter'
 import { fetchRankings } from './espn'
-import type { DraftState, Player, PlayerProfile, ScoutReport, Scoring } from '../domain/types'
+import type {
+  ChatTurn,
+  DraftState,
+  Player,
+  PlayerProfile,
+  ScoutReport,
+  Scoring,
+} from '../domain/types'
 import { fetchProfile } from './profile'
 import { scoutPlayer } from './scout'
+import { streamChat } from './chat'
 import { ScoutError } from './scoutError'
 
 const KEY_RANKINGS = 'fanman.rankings.v1'
@@ -10,6 +18,7 @@ const KEY_DRAFT = 'fanman.draft.v1'
 const KEY_API = 'fanman.apiKey.v1'
 const KEY_SCOUT = 'fanman.scout.v1'
 const KEY_PROFILE = 'fanman.profile.v1'
+const KEY_CHAT = 'fanman.chat.v1'
 
 /** ~1KB each, so this is well under quota even alongside the rankings cache. */
 const MAX_CACHED_PROFILES = 150
@@ -92,6 +101,25 @@ export class BrowserAdapter implements DataAdapter {
     const key = await this.loadApiKey()
     if (!key) throw new ScoutError('No API key set — add one in Settings', 'auth')
     return scoutPlayer(key, player)
+  }
+
+  /**
+   * An async generator, which is an `AsyncIterable` — so the key can be read
+   * before the first delta without the interface having to be a promise of an
+   * iterable, which every caller would then have to await before looping.
+   */
+  async *chat(req: ChatRequest) {
+    const key = await this.loadApiKey()
+    if (!key) throw new ScoutError('No API key set — add one in Settings', 'auth')
+    yield* streamChat(key, req)
+  }
+
+  async loadChat(): Promise<ChatTurn[]> {
+    return read<ChatTurn[]>(KEY_CHAT) ?? []
+  }
+
+  async saveChat(turns: ChatTurn[]): Promise<void> {
+    write(KEY_CHAT, turns)
   }
 }
 

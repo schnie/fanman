@@ -213,3 +213,43 @@ export interface ScoutReport {
   sources: { title: string; url: string }[]
   fetchedAt: number
 }
+
+/** A page the model cited. Same shape the scout reports. */
+export interface ChatSource {
+  title: string
+  url: string
+}
+
+/**
+ * One turn of the draft chat, as the transcript holds it.
+ *
+ * A failed turn stays in the transcript with `failed` set rather than being
+ * dropped: mid-draft, a question that silently vanishes reads as the app
+ * having crashed, and the retry needs something to hang off.
+ *
+ * `divider` is not a turn anyone said — it is a mark in the transcript saying
+ * "the conversation starts again here". It lives in the same array so it is
+ * positional, persists with everything else, and needs no second list to be
+ * kept in step.
+ */
+export interface ChatTurn {
+  id: string
+  role: 'user' | 'assistant' | 'divider'
+  text: string
+  at: number
+  searches?: string[]
+  sources?: ChatSource[]
+  failed?: boolean
+  /**
+   * The answer ran into the token ceiling and stopped mid-thought. Not a
+   * failure — the useful part of a reply is its first sentence — but it must
+   * say so rather than reading as a finished answer that simply ended oddly.
+   */
+  truncated?: boolean
+}
+
+/** A turn as the API wants it — no ids, no timestamps, no failures. */
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+}

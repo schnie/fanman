@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 import { BID_PROMPT } from './components/BidSheet'
-import type { CachedRankings, DataAdapter } from './data/adapter'
+import type { CachedRankings, ChatDelta, ChatRequest, DataAdapter } from './data/adapter'
 import { DEFAULT_SETTINGS } from './domain/types'
-import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
+import type { ChatTurn, DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
 import type { AppUpdates } from './lib/appUpdate'
 import { formatBuildTime } from './lib/format'
@@ -70,6 +70,26 @@ class FakeAdapter implements DataAdapter {
   fetchProfile = async (_playerId: number): Promise<PlayerProfile> => {
     throw new Error('offline')
   }
+  chatTurns: ChatTurn[] = []
+  async loadChat() {
+    return this.chatTurns
+  }
+  async saveChat(t: ChatTurn[]) {
+    this.chatTurns = t
+  }
+  /**
+   * Overridden per-test where the chat is the thing under test. An async
+   * generator, so a test can script the exact delta sequence the real client
+   * would produce — including a failure part-way through an answer.
+   *
+   * The default fails on the first read, like the browser adapter with no key
+   * stored. Written as a function *returning* a generator rather than as a
+   * generator that only throws, which the linter reasonably objects to.
+   */
+  chat = (_req: ChatRequest): AsyncGenerator<ChatDelta> =>
+    (async function* () {
+      yield await Promise.reject(new ScoutError('No API key set — add one in Settings', 'auth'))
+    })()
 }
 
 const bar = () => screen.getByText('Max bid').closest('.budget-bar') as HTMLElement
@@ -109,6 +129,18 @@ async function crossOff(
   }
   for (const d of String(price)) await user.click(screen.getByRole('button', { name: d }))
   await user.click(screen.getByRole('button', { name: `Sold for $${price}` }))
+}
+
+/** Win a player at a price — the other half of `crossOff`. */
+async function win(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  price: number,
+) {
+  await openRow(user, name)
+  await user.click(screen.getByRole('button', { name: 'We got them' }))
+  for (const d of String(price)) await user.click(screen.getByRole('button', { name: d }))
+  await user.click(screen.getByRole('button', { name: `Confirm $${price}` }))
 }
 
 describe('draft board end to end', () => {
@@ -1560,5 +1592,466 @@ describe('the app version section', () => {
 
     expect(screen.queryByRole('button', { name: 'Check for update' })).not.toBeInTheDocument()
     expect(screen.queryByText('App version')).not.toBeInTheDocument()
+  })
+})
+
+describe('ask', () => {
+  /** Every delta the real client can produce, so a test can script a turn. */
+  const answer = (text: string, extra: Partial<Omit<ChatDelta & { type: 'done' }, 'type'>> = {}) =>
+    async function* (): AsyncGenerator<ChatDelta> {
+      for (const word of text.split(' ')) yield { type: 'text', text: `${word} ` }
+      yield { type: 'done', searches: [], sources: [], ...extra }
+    }
+
+  async function openAsk(adapter: FakeAdapter) {
+    const user = userEvent.setup()
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    return user
+  }
+
+  const ask = async (user: ReturnType<typeof userEvent.setup>, question: string) => {
+    await user.type(screen.getByPlaceholderText('Ask about the draft…'), question)
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+  }
+
+  it('points at Settings instead of offering a box that cannot send', async () => {
+    const adapter = new FakeAdapter()
+    await openAsk(adapter)
+
+    // The compose box says why it cannot be used — there is no note under it
+    // to do that any more.
+    expect(screen.getByPlaceholderText('Add an API key in Settings')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+
+  /**
+   * Offline used to be enforced only inside the hook: the box took a question
+   * and swallowed it, which mid-draft reads as the app having broken. The
+   * refusal is now where it can be seen.
+   */
+  it('refuses to take a question offline rather than swallowing it', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let calls = 0
+    adapter.chat = function (_req: ChatRequest) {
+      calls += 1
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    window.dispatchEvent(new Event('offline'))
+
+    const input = await screen.findByPlaceholderText('Offline — questions need the network')
+    expect(input).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(calls).toBe(0)
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    window.dispatchEvent(new Event('online'))
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Ask about the draft…')).not.toBeDisabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+  })
+
+  /**
+   * The openers are a second way to send, and they were gated on the key
+   * alone — so offline they looked live and did nothing at all, which is the
+   * exact swallow the compose box was changed to stop doing.
+   */
+  it('does not offer live-looking openers with no way to send them', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    await openAsk(adapter)
+    expect(screen.getByRole('button', { name: 'Who should I nominate next?' })).toBeInTheDocument()
+
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    window.dispatchEvent(new Event('offline'))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Who should I nominate next?' }),
+      ).not.toBeInTheDocument(),
+    )
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    window.dispatchEvent(new Event('online'))
+  })
+
+  /**
+   * A cut-off answer is still worth reading, but must not sit there looking
+   * finished — the reader would take a half-sentence for the whole verdict.
+   */
+  it('says when an answer was cut off rather than letting it read as finished', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      yield { type: 'text', text: 'Bid up to $44 because the market has' }
+      yield { type: 'done', searches: [], sources: [], truncated: true }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'What should I pay?')
+
+    expect(await screen.findByText(/Bid up to \$44/)).toBeInTheDocument()
+    expect(screen.getByText(/Cut off before it finished/)).toBeInTheDocument()
+  })
+
+  /**
+   * An answer with no text at all would be stored as a blank bubble and then
+   * sent back as an empty content block, which the API rejects — one silent
+   * blank would break every later question in the topic.
+   */
+  it('does not store a blank answer as though it were one', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      yield { type: 'searching' }
+      yield { type: 'done', searches: ['something'], sources: [] }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Anything?')
+
+    expect(await screen.findByText(/That came back empty/)).toBeInTheDocument()
+    // Stored as a failure, so it never goes back to the model.
+    await waitFor(() => expect(adapter.chatTurns.at(-1)?.failed).toBe(true))
+  })
+
+  /** The meter is labelled as money spent, so a call that never happened is not one. */
+  it('does not count a rejected key against the spend meter', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = (_req: ChatRequest): AsyncGenerator<ChatDelta> =>
+      (async function* () {
+        yield await Promise.reject(new ScoutError('API key rejected — check it in Settings', 'auth'))
+      })()
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who?')
+    await screen.findByText('API key rejected — check it in Settings')
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getByText(/Ask tab:/)).toHaveTextContent('Ask tab: 0 questions this session')
+  })
+
+  it('answers a question and keeps both halves of the exchange', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('Bid up to $44 on Nacua.')
+
+    const user = await openAsk(adapter)
+    await ask(user, 'What should I pay for Nacua?')
+
+    expect(await screen.findByText(/Bid up to \$44 on Nacua/)).toBeInTheDocument()
+    expect(screen.getByText('What should I pay for Nacua?')).toBeInTheDocument()
+  })
+
+  /**
+   * The whole point of the feature. If the draft state doesn't reach the
+   * model, this is a generic chat box that happens to live in a draft app.
+   */
+  it('sends the board, our roster and what is already gone', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    await crossOff(user, 'Puka Nacua', 38)
+    await win(user, 'Jahmyr Gibbs', 40)
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await ask(user, 'Now what?')
+
+    await waitFor(() => expect(sent).toHaveLength(1))
+    const { reference, live } = sent[0].context
+
+    // The board, and the league rule the label doesn't state.
+    expect(reference).toContain('Jahmyr Gibbs')
+    expect(reference).toContain('SUPERFLEX')
+    // Where the draft actually is.
+    expect(live).toContain('Won by us (1): Jahmyr Gibbs')
+    expect(live).toContain('Puka Nacua')
+    expect(live).toContain('these are NOT available, never suggest one')
+    expect(live).toContain('Max bid right now: $147')
+    // And the question itself, last.
+    expect(sent[0].messages.at(-1)).toEqual({ role: 'user', text: 'Now what?' })
+  })
+
+  /**
+   * The state is a snapshot taken when a question is sent, not when the
+   * conversation started — so a follow-up asked after a pick reasons about the
+   * roster and the ceiling as they are now, not as they were.
+   */
+  it('re-reads the draft for every question, not once per conversation', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Where am I?')
+    await waitFor(() => expect(sent).toHaveLength(1))
+
+    // Win a player between the two questions.
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    await win(user, 'Jahmyr Gibbs', 40)
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await ask(user, 'And now?')
+    await waitFor(() => expect(sent).toHaveLength(2))
+
+    // Opening position, then the same numbers moved by the win.
+    expect(sent[0].context.live).toContain('Max bid right now: $186')
+    expect(sent[0].context.live).toContain('0 of 15 spots filled')
+    expect(sent[1].context.live).toContain('Max bid right now: $147')
+    expect(sent[1].context.live).toContain('1 of 15 spots filled')
+    expect(sent[1].context.live).toContain('Won by us (1): Jahmyr Gibbs')
+
+    // The board half is unchanged, which is the whole point of the split —
+    // a differing byte here would mean the cached prefix never gets reused.
+    expect(sent[1].context.reference).toBe(sent[0].context.reference)
+
+    // And the earlier exchange is still there, so a follow-up has its referent.
+    expect(sent[1].messages.map((m) => m.text)).toEqual([
+      'Where am I?',
+      'Noted.',
+      'And now?',
+    ])
+  })
+
+  /**
+   * The transcript and the send window are different things. "New topic"
+   * resets only the second — the answers you already paid for stay on screen
+   * to scroll back through.
+   */
+  it('starts a new topic without throwing away the transcript', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who should I nominate?')
+    await waitFor(() => expect(sent).toHaveLength(1))
+
+    await user.click(screen.getByRole('button', { name: 'New topic' }))
+    await ask(user, 'Is Nacua hurt?')
+    await waitFor(() => expect(sent).toHaveLength(2))
+
+    // The second question went out alone — no budget arithmetic bleeding in.
+    expect(sent[1].messages).toEqual([{ role: 'user', text: 'Is Nacua hurt?' }])
+    // But the first exchange is still readable, with a rule between them.
+    expect(screen.getByText('Who should I nominate?')).toBeInTheDocument()
+    expect(screen.getByRole('separator', { name: 'New topic' })).toBeInTheDocument()
+
+    // The board half is untouched, so the cached prefix still applies.
+    expect(sent[1].context.reference).toBe(sent[0].context.reference)
+  })
+
+  /**
+   * Disabled, never unmounted. It shares the compose row with the input, so
+   * popping it in and out would resize the box beside it every time the
+   * transcript went from empty to not.
+   */
+  it('offers no way to draw two lines in a row, or one over nothing', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('Noted.')
+
+    const user = await openAsk(adapter)
+    const newTopic = () => screen.getByRole('button', { name: 'New topic' })
+    // Nothing said yet — nothing to divide, but the button holds its place.
+    expect(newTopic()).toBeDisabled()
+
+    await ask(user, 'Who?')
+    await screen.findByText('Noted.')
+    await waitFor(() => expect(newTopic()).not.toBeDisabled())
+    await user.click(newTopic())
+
+    expect(newTopic()).toBeDisabled()
+    expect(screen.getAllByRole('separator', { name: 'New topic' })).toHaveLength(1)
+  })
+
+  it('keeps the divider across a reload, so the reset survives too', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who?')
+    await screen.findByText('Noted.')
+    await user.click(screen.getByRole('button', { name: 'New topic' }))
+    await waitFor(() => expect(adapter.chatTurns).toHaveLength(3))
+
+    cleanup()
+    const again = userEvent.setup()
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+    await again.click(screen.getByRole('button', { name: 'Ask' }))
+    await again.type(screen.getByPlaceholderText('Ask about the draft…'), 'And now?')
+    await again.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect(sent[1].messages).toEqual([{ role: 'user', text: 'And now?' }])
+  })
+
+  it('shows what it searched and links what it read', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('He is questionable.', {
+      searches: ['nacua injury news'],
+      sources: [{ title: 'Beat writer', url: 'https://example.com/n' }],
+    })
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Any news on Nacua?')
+
+    expect(await screen.findByText(/He is questionable/)).toBeInTheDocument()
+    expect(screen.getByText('Searched: nacua injury news')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Beat writer' })).toHaveAttribute(
+      'href',
+      'https://example.com/n',
+    )
+  })
+
+  it('says it is searching while it searches', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let release: () => void = () => {}
+    const held = new Promise<void>((r) => {
+      release = r
+    })
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      yield { type: 'searching' }
+      await held
+      yield { type: 'text', text: 'Nothing new.' }
+      yield { type: 'done', searches: [], sources: [] }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'News?')
+
+    expect(await screen.findByText('Searching the web…')).toBeInTheDocument()
+    release()
+    expect(await screen.findByText('Nothing new.')).toBeInTheDocument()
+  })
+
+  /**
+   * A question that silently vanishes reads as the app having crashed — the
+   * worst possible impression mid-draft. The failure stays on screen, and
+   * whatever streamed before it stays with it.
+   */
+  it('keeps a half answer when the turn fails, and can ask again', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let attempt = 0
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      attempt += 1
+      if (attempt === 1) {
+        yield { type: 'text', text: 'You could go up to' }
+        throw new ScoutError('Rate limited — retry in a moment', 'rate-limit')
+      }
+      yield { type: 'text', text: 'Up to $44.' }
+      yield { type: 'done', searches: [], sources: [] }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Ceiling on Nacua?')
+
+    expect(await screen.findByText('Rate limited — retry in a moment')).toBeInTheDocument()
+    expect(screen.getByText('You could go up to')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ask again' }))
+    expect(await screen.findByText('Up to $44.')).toBeInTheDocument()
+    // The question was re-asked, not duplicated on screen.
+    expect(screen.getAllByText('Ceiling on Nacua?')).toHaveLength(1)
+  })
+
+  /**
+   * Every question is a paid call, so the send path is the one place that can
+   * start one and it has to hold while a turn is in flight.
+   */
+  it('cannot be sent twice while an answer is still arriving', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let calls = 0
+    let release: () => void = () => {}
+    const held = new Promise<void>((r) => {
+      release = r
+    })
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      calls += 1
+      await held
+      yield { type: 'text', text: 'Done.' }
+      yield { type: 'done', searches: [], sources: [] }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who?')
+
+    await waitFor(() => expect(screen.getByText('Thinking…')).toBeInTheDocument())
+    expect(screen.getByPlaceholderText('Ask about the draft…')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+
+    release()
+    expect(await screen.findByText('Done.')).toBeInTheDocument()
+    expect(calls).toBe(1)
+  })
+
+  it('keeps the transcript across a reload — every turn of it was paid for', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('Take the QB.')
+
+    const user = await openAsk(adapter)
+    await ask(user, 'QB or RB?')
+    await screen.findByText(/Take the QB/)
+    await waitFor(() => expect(adapter.chatTurns).toHaveLength(2))
+
+    cleanup()
+    const again = userEvent.setup()
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+    await again.click(screen.getByRole('button', { name: 'Ask' }))
+
+    expect(await screen.findByText('QB or RB?')).toBeInTheDocument()
+    expect(screen.getByText(/Take the QB/)).toBeInTheDocument()
+  })
+
+  it('does not carry the old conversation into a new draft', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('Take the QB.')
+
+    const user = await openAsk(adapter)
+    await ask(user, 'QB or RB?')
+    await screen.findByText(/Take the QB/)
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    // Twice: the outline button swaps itself for the confirm pair, and the
+    // confirm carries the same label.
+    await user.click(screen.getByRole('button', { name: 'Reset draft' }))
+    await user.click(screen.getByRole('button', { name: 'Reset draft' }))
+
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    expect(screen.queryByText('QB or RB?')).not.toBeInTheDocument()
+    expect(screen.getByText(/Ask about your roster/)).toBeInTheDocument()
   })
 })
