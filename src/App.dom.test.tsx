@@ -1505,7 +1505,14 @@ describe('the app version section', () => {
   it('shows when that build was made, in the time the reader keeps', async () => {
     await openSettings(fakeUpdates())
 
-    const built = formatBuildTime('2026-08-22T14:00:00.000Z')!
+    /*
+     * `toHaveTextContent` collapses whitespace on the DOM side only, so the
+     * expected string has to be collapsed by hand: ICU 72–77 (Node 20) puts a
+     * narrow no-break space before AM/PM, which the DOM side would flatten to a
+     * plain space and this side would keep — a mismatch on Node versions this
+     * machine doesn't happen to run.
+     */
+    const built = formatBuildTime('2026-08-22T14:00:00.000Z')!.replace(/\s+/g, ' ')
     expect(screen.getByText('abc1234').parentElement).toHaveTextContent(
       `Running build abc1234, built ${built}.`,
     )
