@@ -35,13 +35,14 @@ function Sources({ sources }: { sources: NonNullable<ChatTurn['sources']> }) {
  * being careful about the difference between a number ESPN published and one
  * we worked out. So the whole pane is marked as model output rather than
  * trusting the prose to say so each time — see `.chat-turn.assistant` in
- * `App.css` and the standing note under the transcript.
+ * `App.css`. There is no standing note under the transcript doing that job —
+ * a label on each answer is read where the answer is, and survives scrolling
+ * past it.
  */
 export function ChatPane({
   turns,
   streaming,
   searching,
-  calls,
   hasKey,
   online,
   onSend,
@@ -51,8 +52,11 @@ export function ChatPane({
   turns: ChatTurn[]
   streaming: string | null
   searching: boolean
-  calls: number
-  /** "Asking is possible right now" — App folds being online into it. */
+  /**
+   * Kept apart from `online` rather than folded together, because the two
+   * produce different prose in the compose box and only one of them is
+   * something the user can fix from Settings.
+   */
   hasKey: boolean
   online: boolean
   onSend: (text: string) => void
@@ -83,9 +87,22 @@ export function ChatPane({
   }
 
   const last = turns[turns.length - 1]
-  const canRetry = last?.failed === true && hasKey && !busy
+  const canAsk = hasKey && online
+  const canRetry = last?.failed === true && canAsk && !busy
   // Nothing to divide, and never two rules in a row.
   const canDivide = Boolean(last) && last.role !== 'divider' && !busy
+
+  /**
+   * The compose box says why it can't be used, because there is no longer a
+   * note under it to do that — and a disabled input with a cheerful "Ask about
+   * the draft…" in it is a box that looks broken rather than one that looks
+   * unavailable.
+   */
+  const placeholder = !hasKey
+    ? 'Add an API key in Settings'
+    : !online
+      ? 'Offline — questions need the network'
+      : 'Ask about the draft…'
 
   return (
     <div className="chat">
@@ -117,9 +134,9 @@ export function ChatPane({
           <div
             key={turn.id}
             className={`chat-turn ${turn.role}${turn.failed ? ' failed' : ''}`}
-            // Assistant turns are model output and the transcript is long
-            // enough to scroll past the standing note, so each one carries the
-            // attribution itself rather than relying on position.
+            // Assistant turns are model output, and a transcript scrolls —
+            // so each one carries the attribution itself rather than relying
+            // on a note pinned somewhere else in the pane.
             {...(turn.role === 'assistant' && !turn.failed ? { 'data-label': 'Claude' } : {})}
           >
             {turn.text && <p className="chat-text">{turn.text}</p>}
@@ -145,28 +162,27 @@ export function ChatPane({
         {busy && searching && streaming ? <p className="chat-waiting">Searching the web…</p> : null}
 
         {/* Carries a scroll-margin so following the answer doesn't park it
-            under the sticky compose box. */}
+            behind the fixed compose row and the tab bar under that. */}
         <div ref={foot} className="chat-foot" />
       </div>
 
-      {(canRetry || canDivide) && (
-        <div className="chat-actions">
-          {canRetry && (
-            <button type="button" className="chat-retry" onClick={onRetry}>
-              Ask again
-            </button>
-          )}
-          {/* Not gated on having a key or being online: drawing a line under a
-              restored transcript is a local edit, and it is exactly what you
-              want to do while waiting for the network to come back. */}
-          {canDivide && (
-            <button type="button" className="chat-newtopic" onClick={onNewTopic}>
-              New topic
-            </button>
-          )}
-        </div>
+      {canRetry && (
+        <button type="button" className="chat-retry" onClick={onRetry}>
+          Ask again
+        </button>
       )}
 
+      {/*
+        Fixed, not sticky. Sticky put the box in normal flow until the
+        transcript grew past the viewport and only then pinned it, so it sat in
+        two different places depending on how much had been said and shifted
+        between them as you scrolled. A compose box is chrome, like the tab bar
+        under it, and chrome does not move.
+
+        Which makes it the only thing left that can carry the state the note
+        below it used to: with no key or no network there is nothing to say
+        that is not better said in the box you are about to type into.
+      */}
       <form
         className="chat-compose"
         onSubmit={(e) => {
@@ -174,42 +190,46 @@ export function ChatPane({
           submit(draft)
         }}
       >
+        {/*
+          Always rendered, disabled when there is nothing to divide — never
+          conditionally mounted. Popping it in and out would resize the input
+          beside it every time the transcript went from empty to not, which is
+          the same restlessness that moved this whole row off `sticky`.
+
+          Not gated on a key or a network: drawing a line under a restored
+          transcript is a local edit, and it is exactly what you want to do
+          while waiting for the connection to come back.
+        */}
+        <button
+          type="button"
+          className="chat-newtopic"
+          onClick={onNewTopic}
+          disabled={!canDivide}
+          aria-label="New topic"
+          title="New topic"
+        >
+          +
+        </button>
         <input
           className="chat-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={hasKey ? 'Ask about the draft…' : 'Add an API key in Settings'}
-          disabled={!hasKey || busy}
+          placeholder={placeholder}
+          // Offline was previously enforced only inside the hook, so the box
+          // took a question and swallowed it. Refusing in the UI is the same
+          // rule stated where it can be seen.
+          disabled={!canAsk || busy}
           autoComplete="off"
           autoCorrect="off"
           enterKeyHint="send"
         />
         {/* "Send", not "Ask" — the tab is already called Ask, and two controls
             with one name is a coin flip for anything reading by label. */}
-        <button type="submit" className="chat-send" disabled={!hasKey || busy || !draft.trim()}>
+        <button type="submit" className="chat-send" disabled={!canAsk || busy || !draft.trim()}>
           Send
         </button>
       </form>
 
-      {/*
-        Status and spend, not a disclaimer. The attribution used to live here
-        too and doesn't need to: every answer is labelled where it is read,
-        and that label scrolls with the transcript while a standing note under
-        the input is off screen for all but the last turn.
-
-        The bare count stays, for the same reason the scout's does: a control
-        that spends money keeps its meter where the button is, not in a
-        settings screen nobody opens mid-draft. It no longer spells out that
-        each one is billed — anyone who entered an API key knows, and a phone
-        is the wrong place to say it on every render.
-      */}
-      <p className="chat-note">
-        {!online
-          ? 'Offline — questions need the network.'
-          : !hasKey
-            ? 'Add a Claude API key in Settings to ask questions.'
-            : `${calls} question${calls === 1 ? '' : 's'} asked this draft.`}
-      </p>
     </div>
   )
 }

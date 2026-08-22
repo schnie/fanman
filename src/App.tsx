@@ -447,7 +447,6 @@ export default function App({
           turns={chat.turns}
           streaming={chat.streaming}
           searching={chat.searching}
-          calls={chat.calls}
           hasKey={scout.hasKey}
           online={online}
           onSend={chat.send}
@@ -465,6 +464,7 @@ export default function App({
           onReset={resetAll}
           adapter={adapter}
           scoutCalls={scout.calls}
+          chatCalls={chat.calls}
           onKeyChange={scout.refreshKey}
           updates={updates}
           online={online}
@@ -488,8 +488,12 @@ export default function App({
       )}
 
       {/* Nothing should float over a modal — one predicate, so a third sheet
-          inherits the guard rather than quietly escaping it. */}
-      <ScrollTopButton visible={scrolledDeep && !sheet} />
+          inherits the guard rather than quietly escaping it. The Ask tab joins
+          it for the same reason: its compose row is fixed at exactly the
+          height this button occupies, so the two would sit on top of each
+          other. No loss — a chat follows its own tail, and the way back up a
+          transcript is to scroll it. */}
+      <ScrollTopButton visible={scrolledDeep && !sheet && tab !== 'ask'} />
 
       <nav className="tabs">
         {TABS.map(([id, label]) => (

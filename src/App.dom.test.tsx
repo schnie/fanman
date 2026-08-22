@@ -1662,9 +1662,41 @@ describe('ask', () => {
     const adapter = new FakeAdapter()
     await openAsk(adapter)
 
+    // The compose box says why it cannot be used — there is no note under it
+    // to do that any more.
     expect(screen.getByPlaceholderText('Add an API key in Settings')).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
-    expect(screen.getByText(/Add a Claude API key in Settings to ask questions/)).toBeInTheDocument()
+  })
+
+  /**
+   * Offline used to be enforced only inside the hook: the box took a question
+   * and swallowed it, which mid-draft reads as the app having broken. The
+   * refusal is now where it can be seen.
+   */
+  it('refuses to take a question offline rather than swallowing it', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    let calls = 0
+    adapter.chat = function (_req: ChatRequest) {
+      calls += 1
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    window.dispatchEvent(new Event('offline'))
+
+    const input = await screen.findByPlaceholderText('Offline — questions need the network')
+    expect(input).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(calls).toBe(0)
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    window.dispatchEvent(new Event('online'))
+    await waitFor(() =>
+      expect(screen.getByPlaceholderText('Ask about the draft…')).not.toBeDisabled(),
+    )
+    await user.click(screen.getByRole('button', { name: 'Board' }))
   })
 
   it('answers a question and keeps both halves of the exchange', async () => {
@@ -1790,20 +1822,27 @@ describe('ask', () => {
     expect(sent[1].context.reference).toBe(sent[0].context.reference)
   })
 
+  /**
+   * Disabled, never unmounted. It shares the compose row with the input, so
+   * popping it in and out would resize the box beside it every time the
+   * transcript went from empty to not.
+   */
   it('offers no way to draw two lines in a row, or one over nothing', async () => {
     const adapter = new FakeAdapter()
     adapter.apiKey = 'sk-ant-test'
     adapter.chat = answer('Noted.')
 
     const user = await openAsk(adapter)
-    // Nothing said yet — nothing to divide.
-    expect(screen.queryByRole('button', { name: 'New topic' })).not.toBeInTheDocument()
+    const newTopic = () => screen.getByRole('button', { name: 'New topic' })
+    // Nothing said yet — nothing to divide, but the button holds its place.
+    expect(newTopic()).toBeDisabled()
 
     await ask(user, 'Who?')
     await screen.findByText('Noted.')
-    await user.click(screen.getByRole('button', { name: 'New topic' }))
+    await waitFor(() => expect(newTopic()).not.toBeDisabled())
+    await user.click(newTopic())
 
-    expect(screen.queryByRole('button', { name: 'New topic' })).not.toBeInTheDocument()
+    expect(newTopic()).toBeDisabled()
     expect(screen.getAllByRole('separator', { name: 'New topic' })).toHaveLength(1)
   })
 

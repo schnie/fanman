@@ -1702,7 +1702,9 @@ hr {
  */
 
 .chat {
-  padding: 14px 14px 0;
+  /* Bottom clears the fixed compose row; the tab bar under it is already
+     accounted for by `.app`. */
+  padding: 14px 14px 72px;
 }
 
 .chat-intro {
@@ -1842,44 +1844,64 @@ hr {
   background: var(--line);
 }
 
-.chat-actions {
-  display: flex;
-  gap: 8px;
+.chat-retry {
+  align-self: flex-start;
   margin-top: 12px;
-}
-
-.chat-retry,
-.chat-newtopic {
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--line);
   font-size: 14px;
   font-weight: 600;
-}
-
-.chat-retry {
   color: var(--accent);
 }
 
-/* Quieter than Retry: one is recovering from a failure, the other is ordinary
-   housekeeping and should not compete with the compose box below it. */
-.chat-newtopic {
-  margin-left: auto;
-  color: var(--muted);
-}
-
-/* Sticky so a long transcript never means scrolling back down to type. The
-   offset clears the fixed tab bar (60px plus its safe-area padding). */
+/*
+ * Fixed, not sticky.
+ *
+ * Sticky left the box in normal flow until the transcript outgrew the
+ * viewport and only pinned it after that, so it lived in one of two places
+ * depending on how much had been said and visibly stepped between them
+ * mid-scroll. A compose box is chrome, like the tab bar it sits above, and
+ * chrome holds still.
+ *
+ * Centred to `.app`'s own width rather than spanning the viewport: at
+ * `left: 0; right: 0` it would run full-bleed on a desktop while the
+ * transcript above it stayed in a 720px column.
+ */
 .chat-compose {
-  position: sticky;
-  bottom: calc(72px + env(safe-area-inset-bottom));
+  position: fixed;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 720px);
+  /* Under the tab bar (30), over the transcript. */
   z-index: 20;
   display: flex;
   gap: 8px;
-  margin-top: 16px;
-  padding: 10px 0;
+  padding: 10px 14px;
   background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+/*
+ * The new-conversation idiom, kept to a square so the input beside it gets
+ * the rest of the row. Disabled rather than unmounted when there is nothing
+ * to divide — see the note in ChatPane.
+ */
+.chat-newtopic {
+  flex: 0 0 auto;
+  width: 42px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.chat-newtopic:disabled {
+  opacity: 0.4;
 }
 
 .chat-input {
@@ -1906,13 +1928,6 @@ hr {
 .chat-send:disabled {
   background: var(--surface-2);
   color: var(--muted);
-}
-
-.chat-note {
-  margin: 4px 0 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* A reveal and a pulse are both motion; neither is load-bearing. */

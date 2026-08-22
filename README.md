@@ -256,8 +256,8 @@ is gone and never who bought them — so the most it can honestly say is what a
 typical rival can still bid. `npm run test:chat` checks all three against the
 real model.
 
-**It costs money per question.** Each one is a billed call, and the tab shows a
-running count. The board is re-sent every time, so it sits behind a prompt
+**It costs money per question.** Each one is a billed call, counted in
+Settings beside the scout's. The board is re-sent every time, so it sits behind a prompt
 cache with a one-hour lifetime — repeat questions during a draft re-read it at
 about a tenth of the price. Only the last few exchanges go back to the model;
 the transcript on screen keeps everything.
@@ -270,7 +270,7 @@ cheapest part of a question, and the board sits behind the same cache either
 side of the line.
 
 Answers are Claude's, not ESPN's, and every one of them is labelled as such
-where you read it rather than in a note at the bottom of the tab — check
+where you read it rather than in a note somewhere else in the tab — check
 anything load-bearing before you spend $60 on it. The transcript survives a
 reload and is cleared when you reset the draft.
 
