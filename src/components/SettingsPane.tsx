@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_SETTINGS, type Scoring, type Settings } from '../domain/types'
 import type { DataAdapter } from '../data/adapter'
+import type { AppUpdates, UpdateCheck } from '../lib/appUpdate'
 import { describeAge } from '../lib/format'
 
 /**
@@ -30,6 +31,8 @@ export function SettingsPane({
   adapter,
   scoutCalls,
   onKeyChange,
+  updates,
+  online,
 }: {
   settings: Settings
   fetchedAt: number | null
@@ -39,6 +42,10 @@ export function SettingsPane({
   adapter: DataAdapter
   scoutCalls: number
   onKeyChange: () => void
+  /** Absent where there is no service worker to update — see `App`. */
+  updates?: AppUpdates
+  /** Only the reinstall cares, and only so it can refuse to run offline. */
+  online: boolean
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [apiKey, setApiKey] = useState('')
@@ -151,6 +158,13 @@ export function SettingsPane({
         this session.
       </div>
 
+      {updates && (
+        <>
+          <hr />
+          <AppVersion updates={updates} online={online} />
+        </>
+      )}
+
       <hr />
 
       {confirmReset ? (
@@ -170,6 +184,117 @@ export function SettingsPane({
       )}
     </div>
   )
+}
+
+/** `idle` is "hasn't been asked yet", which is not the same as `current`. */
+type CheckState = 'idle' | 'checking' | UpdateCheck
+
+/** The reinstall's own progression, kept apart from the check's. */
+type ReinstallState = 'idle' | 'confirm' | 'working' | 'failed'
+
+/**
+ * What the note under the button says. Split out so the copy is editable
+ * without touching the state machine, the same way `NextMove` keeps wording
+ * away from judgement.
+ */
+const CHECK_NOTE: Record<CheckState, string> = {
+  idle: 'Installed apps only look for new code when they are reopened, and iOS often skips that. This asks now.',
+  checking: 'Asking the server for a newer build…',
+  current: "You're on the latest build.",
+  updating: 'A newer build is downloading. The app will reload itself when it lands.',
+  failed: "Couldn't reach the server. Check the connection and try again.",
+  unsupported: 'This browser is not running the offline app, so a plain refresh already gets you the latest.',
+}
+
+/**
+ * "Which build am I on, and how do I get the new one?" — two questions a
+ * home-screen install could not answer, because it has no address bar to read
+ * and no refresh button to press. See `lib/appUpdate.ts` for why the automatic
+ * path needed help and why re-adding the icon is not an acceptable answer.
+ */
+function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean }) {
+  const [state, setState] = useState<CheckState>('idle')
+  const [reinstall, setReinstall] = useState<ReinstallState>('idle')
+
+  const check = async () => {
+    setState('checking')
+    try {
+      setState(await updates.check())
+    } catch {
+      // A check that threw is a check that did not happen. Leaving the button
+      // spinning on "Checking…" forever is the only outcome worse than saying
+      // so, and it takes the retry with it.
+      setState('failed')
+    }
+  }
+
+  const runReinstall = async () => {
+    setReinstall('working')
+    try {
+      await updates.reinstall()
+      // On success the page is already reloading; there is no "after" to render.
+    } catch {
+      setReinstall('failed')
+    }
+  }
+
+  // `updating` stays disabled too: the reload is already on its way, and a
+  // second check in the meantime can only confuse the story.
+  const busy = state === 'checking' || state === 'updating'
+
+  return (
+    <>
+      <h3 className="pane-heading">App version</h3>
+      <div className="field-note">
+        Running build <strong>{updates.version}</strong>.
+      </div>
+      <button className="wide" onClick={check} disabled={busy}>
+        {state === 'checking' ? 'Checking…' : 'Check for update'}
+      </button>
+      <div className="field-note">{CHECK_NOTE[state]}</div>
+
+      {reinstall === 'confirm' ? (
+        <div className="danger-confirm">
+          <p>
+            Download the app again from scratch? Your picks, settings and API key
+            are stored separately and will survive.
+          </p>
+          <div className="danger-actions">
+            <button onClick={() => setReinstall('idle')}>Cancel</button>
+            <button className="danger" onClick={runReinstall}>
+              Reinstall
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="wide danger-outline"
+          onClick={() => setReinstall('confirm')}
+          /*
+           * Offline this is destructive with no upside: it deletes the cached
+           * app and then has nowhere to download it from, so the phone is left
+           * with a dead icon until the network comes back. That is the exact
+           * situation the rest of the app is built to survive, so the one
+           * control that can't survive it refuses to run.
+           */
+          disabled={!online || reinstall === 'working'}
+        >
+          {reinstall === 'working' ? 'Reinstalling…' : 'Reinstall app files'}
+        </button>
+      )}
+      <div className="field-note">{reinstallNote(online, reinstall)}</div>
+    </>
+  )
+}
+
+function reinstallNote(online: boolean, state: ReinstallState): string {
+  if (state === 'failed') {
+    return 'Could not clear the cached app — this browser may be blocking storage. Try again, or reopen the app from the home screen.'
+  }
+  if (!online) {
+    return 'Needs a connection: this deletes the cached app before fetching it again, so offline it would leave nothing to run.'
+  }
+  return 'For when the check keeps saying you are up to date and you know a new version shipped. Clears the cached app and fetches it fresh. Reach for this instead of deleting the home-screen icon, which takes the draft with it.'
 }
 
 /**

@@ -10,7 +10,22 @@ import { VitePWA } from 'vite-plugin-pwa'
  */
 const BASE = process.env.VITE_BASE ?? '/fanman/'
 
+/**
+ * Stamped into the bundle so Settings can say which build the device is on. An
+ * installed home-screen app gives you no other way to tell, which is what made
+ * "is it even updating?" impossible to answer from the couch.
+ *
+ * The timestamp also guarantees that every deploy produces different bytes, so
+ * the service worker always has something to notice even for a change that
+ * happens to leave the chunk hashes alone.
+ */
+const BUILD = `${(process.env.GITHUB_SHA ?? 'local').slice(0, 7)} · ${new Date()
+  .toISOString()
+  .slice(0, 16)
+  .replace('T', ' ')}Z`
+
 export default defineConfig(({ command }) => ({
+  define: { __APP_BUILD__: JSON.stringify(BUILD) },
   // Dev stays at the root so the published-port URL is just localhost:5173.
   base: command === 'build' ? BASE : '/',
   plugins: [
@@ -20,6 +35,14 @@ export default defineConfig(({ command }) => ({
       // newest code automatically is safe — and far better than being stuck on
       // a stale build on draft morning with no way to tell.
       registerType: 'autoUpdate',
+      /*
+       * We register the worker ourselves, in `src/lib/appUpdate.ts`, so that
+       * the update check can also run when an installed app is *resumed* — the
+       * event iOS gives you instead of a page load, and the reason a home-screen
+       * install could sit on week-old code indefinitely. Letting the plugin also
+       * inject its script would register twice and wire up two reload listeners.
+       */
+      injectRegister: null,
       // The plugin precaches the manifest and its icons itself, so the glob
       // below must NOT also claim svg/webmanifest or they get double-entered.
       // favicon.svg is only referenced from index.html, so name it here.
@@ -40,6 +63,18 @@ export default defineConfig(({ command }) => ({
         ],
       },
       workbox: {
+        /*
+         * The plugin sets both itself for `autoUpdate`, but only while
+         * `injectRegister` is `'auto'` or `null` — which is what it is above,
+         * so today these two lines change nothing. They are here because the
+         * entire update story rests on them and that dependency is invisible:
+         * setting `injectRegister` to `'script'` or `'inline'` would silently
+         * drop `skipWaiting`, and a new build would then sit in the waiting
+         * state until every tab closes — on a home-screen app that is only ever
+         * suspended, close to never.
+         */
+        skipWaiting: true,
+        clientsClaim: true,
         // Precache the whole shell. It's ~110KB gzipped, so there is no reason
         // to be selective — everything needed to run a draft is on the device.
         globPatterns: ['**/*.{js,css,html}'],

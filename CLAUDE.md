@@ -76,6 +76,28 @@ silently stale scout report is worse than no report. The service worker precache
 the shell only — see the comment block in `vite.config.ts` before adding a
 `runtimeCaching` entry.
 
+**An installed app has to be *told* to look for a new build.** `autoUpdate`
+supplies the mechanism — skip waiting, claim the page, reload — but the trigger
+is a page load, and tapping the icon of a suspended iOS app resumes a frozen
+page instead of navigating. Force-quitting is supposed to force that load and
+doesn't reliably. So `lib/appUpdate.ts` runs `registration.update()` itself on
+foreground, on a slow timer, and from a button in Settings; the event that
+actually fires on an iOS resume is `pageshow`, not `load`. A check that fails
+reports `failed`, never `current` — same reasoning as the visible rankings
+timestamp. Because we register the worker, `injectRegister` is `null`, and
+`skipWaiting`/`clientsClaim` are restated explicitly — redundantly today, since
+the plugin sets them for `injectRegister` of `'auto'` *or* `null`, but the whole
+update story rests on them and switching to `'script'`/`'inline'` would drop
+them silently.
+
+**The update seam is a prop, not the adapter.** `DataAdapter` is about data;
+which build is installed is about the shell. `main.tsx` builds `AppUpdates` and
+passes it down, so a Wails shell — which has no worker, no cache and nothing to
+update — simply doesn't, and Settings omits the section rather than offering
+buttons that cannot do anything. `reinstall()` drops the worker and every cache
+but never `localStorage`: the workaround it replaces is deleting the home-screen
+icon, which takes the draft with it and is therefore useless exactly when needed.
+
 **Scout calls cost real money.** Any change near `useScout.ts` must answer: can
 this pay twice for a report we already hold? Dispatch de-duplication tracks only
 what is *queued or running* — deliberately not "what has been scouted", because

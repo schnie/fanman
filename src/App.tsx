@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { BrowserAdapter } from './data/browserAdapter'
 import type { DataAdapter } from './data/adapter'
+import type { AppUpdates } from './lib/appUpdate'
 import { useDraft, useRankings } from './useDraft'
 import { useScout } from './useScout'
 import { useProfile } from './useProfile'
@@ -46,8 +47,15 @@ function isSearchFor(query: string, player: Player): boolean {
 /**
  * `adapter` is injectable so the Wails shell can supply its own implementation
  * — and so tests can drive the real UI without touching the network.
+ *
+ * `updates` is the same idea for the service worker: it is the browser build's
+ * concern, `main.tsx` supplies it, and where there is nothing to update — a
+ * desktop shell, a test — it is absent and Settings simply omits the section.
  */
-export default function App({ adapter: injected }: { adapter?: DataAdapter } = {}) {
+export default function App({
+  adapter: injected,
+  updates,
+}: { adapter?: DataAdapter; updates?: AppUpdates } = {}) {
   const fallback = useMemo(() => new BrowserAdapter(), [])
   const adapter = injected ?? fallback
   const online = useOnline()
@@ -407,6 +415,8 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
           adapter={adapter}
           scoutCalls={scout.calls}
           onKeyChange={scout.refreshKey}
+          updates={updates}
+          online={online}
         />
       )}
 

@@ -254,6 +254,21 @@ Updates use `autoUpdate`. Draft state is in localStorage and survives a reload,
 so taking the newest code automatically is safe, and far better than being
 stuck on a stale build on draft morning with no way to tell.
 
+That covers the *mechanism*, and for a while it quietly wasn't enough. A service
+worker looks for a new build on a page load, and tapping the icon of an
+installed iOS app usually resumes a frozen page rather than navigating — so the
+check might not run for days, in an app with no address bar and no refresh
+button to force it with. Force-quitting from the app switcher is supposed to
+force that load and doesn't reliably.
+
+So the app asks for itself: it re-checks every time it comes to the foreground,
+on a slow timer while it sits open, and on demand. **Settings → App version**
+shows which build the device is actually running and has a **Check for update**
+button, plus **Reinstall app files** for when the check keeps insisting there is
+nothing new — that one drops the cached app and refetches it, and deliberately
+leaves your picks, settings and API key alone. Reach for it instead of deleting
+the home-screen icon, which wipes the draft along with the cache.
+
 When the browser reports no network, the header shows an **Offline** marker and
 the scout stops dispatching entirely rather than queuing calls that can only
 fail. Everything else — board, bidding, budget math, roster — is local
@@ -324,6 +339,9 @@ Do this the night before, not in the parking lot:
 4. Turn wifi and cell off and reopen from the home screen. The board should
    come up with the **Offline** marker in the header. That is the real check —
    everything except the scout and a rankings refresh works from there.
+5. Back on wifi, open **Settings → App version** and hit **Check for update**,
+   so the phone is on the same build you last deployed. If it insists it is
+   current and you know better, **Reinstall app files** — your draft survives it.
 
 ## Status
 
