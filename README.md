@@ -262,6 +262,13 @@ cache with a one-hour lifetime — repeat questions during a draft re-read it at
 about a tenth of the price. Only the last few exchanges go back to the model;
 the transcript on screen keeps everything.
 
+**New topic** draws a line under the conversation. Everything above it stays
+readable — you paid for those answers — but the model starts clean from that
+point, so twenty turns of budget arithmetic don't bleed into "is this receiver
+hurt". Reach for it when the subject changes, not to save money: history is the
+cheapest part of a question, and the board sits behind the same cache either
+side of the line.
+
 Answers are Claude's, not ESPN's, and every one of them is labelled as such
 where you read it rather than in a note at the bottom of the tab — check
 anything load-bearing before you spend $60 on it. The transcript survives a

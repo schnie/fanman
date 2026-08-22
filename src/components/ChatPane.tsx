@@ -46,6 +46,7 @@ export function ChatPane({
   online,
   onSend,
   onRetry,
+  onNewTopic,
 }: {
   turns: ChatTurn[]
   streaming: string | null
@@ -56,6 +57,7 @@ export function ChatPane({
   online: boolean
   onSend: (text: string) => void
   onRetry: () => void
+  onNewTopic: () => void
 }) {
   const [draft, setDraft] = useState('')
   const foot = useRef<HTMLDivElement>(null)
@@ -80,7 +82,10 @@ export function ChatPane({
     setDraft('')
   }
 
-  const lastFailed = turns.length > 0 && turns[turns.length - 1].failed === true
+  const last = turns[turns.length - 1]
+  const canRetry = last?.failed === true && hasKey && !busy
+  // Nothing to divide, and never two rules in a row.
+  const canDivide = Boolean(last) && last.role !== 'divider' && !busy
 
   return (
     <div className="chat">
@@ -100,7 +105,15 @@ export function ChatPane({
       )}
 
       <div className="chat-log">
-        {turns.map((turn) => (
+        {turns.map((turn) =>
+          turn.role === 'divider' ? (
+            // A separator, not a message — it carries its label as an
+            // accessible name so the rule reads as one thing rather than as a
+            // stray paragraph between two answers.
+            <div key={turn.id} className="chat-divider" role="separator" aria-label="New topic">
+              New topic
+            </div>
+          ) : (
           <div
             key={turn.id}
             className={`chat-turn ${turn.role}${turn.failed ? ' failed' : ''}`}
@@ -115,7 +128,8 @@ export function ChatPane({
             )}
             {turn.sources && turn.sources.length > 0 && <Sources sources={turn.sources} />}
           </div>
-        ))}
+          ),
+        )}
 
         {busy && (
           <div className="chat-turn assistant" data-label="Claude">
@@ -135,10 +149,22 @@ export function ChatPane({
         <div ref={foot} className="chat-foot" />
       </div>
 
-      {lastFailed && hasKey && (
-        <button type="button" className="chat-retry" onClick={onRetry}>
-          Ask again
-        </button>
+      {(canRetry || canDivide) && (
+        <div className="chat-actions">
+          {canRetry && (
+            <button type="button" className="chat-retry" onClick={onRetry}>
+              Ask again
+            </button>
+          )}
+          {/* Not gated on having a key or being online: drawing a line under a
+              restored transcript is a local edit, and it is exactly what you
+              want to do while waiting for the network to come back. */}
+          {canDivide && (
+            <button type="button" className="chat-newtopic" onClick={onNewTopic}>
+              New topic
+            </button>
+          )}
+        </div>
       )}
 
       <form

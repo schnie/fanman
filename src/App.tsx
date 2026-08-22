@@ -452,6 +452,7 @@ export default function App({
           online={online}
           onSend={chat.send}
           onRetry={chat.retry}
+          onNewTopic={chat.newTopic}
         />
       )}
 

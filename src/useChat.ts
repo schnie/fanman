@@ -22,6 +22,42 @@ function nextId(): string {
 }
 
 /**
+ * The turns that go back to the API with a new question.
+ *
+ * Three rules, and the order they apply in is the whole of it:
+ *
+ * 1. A divider resets the conversation, so everything up to and including the
+ *    last one is dropped.
+ * 2. Failed turns never go back — the model has no use for our error prose,
+ *    and a rejected key would otherwise poison every later question with a
+ *    paragraph about a rejected key.
+ * 3. What survives is windowed to the last `HISTORY_TURNS`.
+ *
+ * The window must come last. Apply it first and a divider sitting further back
+ * than twelve turns falls outside the slice and silently stops working — the
+ * button would look like it did something (the rule renders) while the model
+ * kept reading straight through it.
+ *
+ * Exported for its tests: these three interact, and the DOM test can only
+ * reach one combination at a time.
+ */
+export function sendableHistory(turns: ChatTurn[], limit = HISTORY_TURNS): ChatMessage[] {
+  let start = 0
+  for (let i = turns.length - 1; i >= 0; i--) {
+    if (turns[i].role === 'divider') {
+      start = i + 1
+      break
+    }
+  }
+  return turns
+    .slice(start)
+    .flatMap((t) =>
+      t.role === 'divider' || t.failed ? [] : [{ role: t.role, text: t.text }],
+    )
+    .slice(-limit)
+}
+
+/**
  * The draft chat.
  *
  * Deliberately unlike `useScout` in one way: there is no queue, no pre-warm
@@ -102,13 +138,7 @@ export function useChat(
       setStreaming('')
       setSearching(false)
 
-      // Failed turns are on screen but never sent back: the model has no use
-      // for our error prose, and a rejected key would otherwise poison every
-      // later question with a paragraph about a rejected key.
-      const messages: ChatMessage[] = history
-        .filter((t) => !t.failed)
-        .slice(-HISTORY_TURNS)
-        .map((t) => ({ role: t.role, text: t.text }))
+      const messages: ChatMessage[] = sendableHistory(history)
       messages.push({ role: 'user', text: question })
 
       let text = ''
@@ -198,6 +228,30 @@ export function useChat(
     void run(kept.slice(0, -1), last.text)
   }, [run, hasKey, online])
 
+  /**
+   * Draw a line under the conversation so far.
+   *
+   * Deliberately not "clear the chat". The transcript on screen is the record
+   * of what you have already been told and is worth scrolling back through;
+   * what needs resetting is only what we re-send, and those have been separate
+   * things since `HISTORY_TURNS`. So this marks the transcript rather than
+   * emptying it, and costs one turn's worth of tokens on the next question
+   * instead of a fresh cache write — the reference block is identical either
+   * side of the line, so nothing about the cached prefix changes.
+   *
+   * The real win is staleness, not the tokens. Twenty turns of budget
+   * arithmetic bleeding into "is this receiver hurt" is the failure this
+   * exists to prevent.
+   */
+  const newTopic = useCallback(() => {
+    if (busy.current) return
+    const prev = turnsRef.current
+    // Nothing to divide, or the line is already the last thing there.
+    if (prev.length === 0 || prev[prev.length - 1].role === 'divider') return
+    turnsRef.current = [...prev, { id: nextId(), role: 'divider', text: '', at: Date.now() }]
+    setTurns(turnsRef.current)
+  }, [])
+
   /** Wiped with the draft — a new draft should not inherit the old one's answers. */
   const clearChat = useCallback(() => {
     turnsRef.current = []
@@ -205,5 +259,5 @@ export function useChat(
     void adapter.saveChat([])
   }, [adapter])
 
-  return { turns, streaming, searching, calls, send, retry, clearChat }
+  return { turns, streaming, searching, calls, send, retry, newTopic, clearChat }
 }

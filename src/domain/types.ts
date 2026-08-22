@@ -226,10 +226,15 @@ export interface ChatSource {
  * A failed turn stays in the transcript with `failed` set rather than being
  * dropped: mid-draft, a question that silently vanishes reads as the app
  * having crashed, and the retry needs something to hang off.
+ *
+ * `divider` is not a turn anyone said — it is a mark in the transcript saying
+ * "the conversation starts again here". It lives in the same array so it is
+ * positional, persists with everything else, and needs no second list to be
+ * kept in step.
  */
 export interface ChatTurn {
   id: string
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'divider'
   text: string
   at: number
   searches?: string[]

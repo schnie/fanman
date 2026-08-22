@@ -179,9 +179,26 @@ the risk is not a repeated call but a doubled one. Never start a call from
 inside a `setState` updater: React may invoke an updater more than once per
 update and does so deliberately under StrictMode. `useChat` reads the
 transcript through `turnsRef` and claims `busy.current` synchronously in
-`send`, before `run` is reached, so two taps in one tick cannot both pay. Only
-the last `HISTORY_TURNS` go back to the API; the transcript on screen is never
-trimmed, only what we pay to re-read.
+`send`, before `run` is reached, so two taps in one tick cannot both pay.
+
+**The transcript and the send window are separate, and that is what makes "New
+topic" cheap.** `sendableHistory` decides what goes back to the API: everything
+after the last divider, minus failed turns, windowed to `HISTORY_TURNS`. The
+window applies *last* — apply it first and a divider sitting further back than
+the limit falls outside the slice and silently stops working, with the rule
+still rendering on screen while the model reads straight through it.
+`useChat.test.ts` covers that ordering specifically.
+
+Threading is not a cost lever and shouldn't be sold as one. Measured on a
+full board mid-draft: `reference` ~4.1K tokens (cached), `live` ~2.0K
+(uncached, and it *grows* as the gone-list does), history ~1K. Killing a thread
+saves the smallest of the three, about a fifth of a turn. The cache is keyed on
+prefix content, not conversation identity, so a divider costs nothing and
+invalidates nothing — the reference block is byte-identical either side of it.
+The reason the feature exists is staleness: the prompt tells the model its own
+earlier answers are stale, and a divider is the version of that which actually
+works. If real token pressure ever appears, the target is `live`'s gone-list,
+not history.
 
 **`chat()` is the only `DataAdapter` method that isn't a `Promise`.** It returns
 an `AsyncIterable` because an answer that arrives in one lump after twenty

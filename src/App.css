@@ -1819,16 +1819,54 @@ hr {
   scroll-margin-bottom: calc(150px + env(safe-area-inset-bottom));
 }
 
-.chat-retry {
-  align-self: flex-start;
+/*
+ * A line under the conversation, not a message in it. The transcript stays;
+ * only what we re-send to the model is reset — see `sendableHistory`.
+ */
+.chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chat-divider::before,
+.chat-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.chat-actions {
+  display: flex;
+  gap: 8px;
   margin-top: 12px;
+}
+
+.chat-retry,
+.chat-newtopic {
   padding: 8px 14px;
   border-radius: 8px;
   background: var(--surface);
   border: 1px solid var(--line);
-  color: var(--accent);
   font-size: 14px;
   font-weight: 600;
+}
+
+.chat-retry {
+  color: var(--accent);
+}
+
+/* Quieter than Retry: one is recovering from a failure, the other is ordinary
+   housekeeping and should not compete with the compose box below it. */
+.chat-newtopic {
+  margin-left: auto;
+  color: var(--muted);
 }
 
 /* Sticky so a long transcript never means scrolling back down to type. The

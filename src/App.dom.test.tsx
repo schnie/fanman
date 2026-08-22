@@ -1758,6 +1758,82 @@ describe('ask', () => {
     ])
   })
 
+  /**
+   * The transcript and the send window are different things. "New topic"
+   * resets only the second — the answers you already paid for stay on screen
+   * to scroll back through.
+   */
+  it('starts a new topic without throwing away the transcript', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who should I nominate?')
+    await waitFor(() => expect(sent).toHaveLength(1))
+
+    await user.click(screen.getByRole('button', { name: 'New topic' }))
+    await ask(user, 'Is Nacua hurt?')
+    await waitFor(() => expect(sent).toHaveLength(2))
+
+    // The second question went out alone — no budget arithmetic bleeding in.
+    expect(sent[1].messages).toEqual([{ role: 'user', text: 'Is Nacua hurt?' }])
+    // But the first exchange is still readable, with a rule between them.
+    expect(screen.getByText('Who should I nominate?')).toBeInTheDocument()
+    expect(screen.getByRole('separator', { name: 'New topic' })).toBeInTheDocument()
+
+    // The board half is untouched, so the cached prefix still applies.
+    expect(sent[1].context.reference).toBe(sent[0].context.reference)
+  })
+
+  it('offers no way to draw two lines in a row, or one over nothing', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = answer('Noted.')
+
+    const user = await openAsk(adapter)
+    // Nothing said yet — nothing to divide.
+    expect(screen.queryByRole('button', { name: 'New topic' })).not.toBeInTheDocument()
+
+    await ask(user, 'Who?')
+    await screen.findByText('Noted.')
+    await user.click(screen.getByRole('button', { name: 'New topic' }))
+
+    expect(screen.queryByRole('button', { name: 'New topic' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('separator', { name: 'New topic' })).toHaveLength(1)
+  })
+
+  it('keeps the divider across a reload, so the reset survives too', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who?')
+    await screen.findByText('Noted.')
+    await user.click(screen.getByRole('button', { name: 'New topic' }))
+    await waitFor(() => expect(adapter.chatTurns).toHaveLength(3))
+
+    cleanup()
+    const again = userEvent.setup()
+    render(<App adapter={adapter} />)
+    await findRow('Jahmyr Gibbs')
+    await again.click(screen.getByRole('button', { name: 'Ask' }))
+    await again.type(screen.getByPlaceholderText('Ask about the draft…'), 'And now?')
+    await again.click(screen.getByRole('button', { name: 'Send' }))
+
+    await waitFor(() => expect(sent).toHaveLength(2))
+    expect(sent[1].messages).toEqual([{ role: 'user', text: 'And now?' }])
+  })
+
   it('shows what it searched and links what it read', async () => {
     const adapter = new FakeAdapter()
     adapter.apiKey = 'sk-ant-test'
