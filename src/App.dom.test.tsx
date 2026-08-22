@@ -8,6 +8,7 @@ import type { CachedRankings, DataAdapter } from './data/adapter'
 import { DEFAULT_SETTINGS } from './domain/types'
 import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
+import type { AppUpdates } from './lib/appUpdate'
 import { makePlayer, makeProfile, makeReport } from './test/factories'
 
 const player = (id: number, name: string, rank: number, position = 'RB'): Player =>
@@ -1397,5 +1398,84 @@ describe('the settings number fields', () => {
 
     expect(depth).toHaveValue(40)
     await waitFor(() => expect(adapter.draft?.settings.prewarmDepth).toBe(40))
+  })
+})
+
+/**
+ * The update controls exist because an installed home-screen app has no refresh
+ * button and iOS will not reliably run the service worker's own check — see
+ * `lib/appUpdate.ts`. These cover the parts a thumb actually reaches; the state
+ * machine behind them is covered in `appUpdate.test.ts`.
+ */
+describe('the app version section', () => {
+  const fakeUpdates = (overrides: Partial<AppUpdates> = {}): AppUpdates => ({
+    version: 'abc1234 · 2026-08-22 10:00Z',
+    check: async () => 'current',
+    reinstall: async () => {},
+    ...overrides,
+  })
+
+  const openSettings = async (updates?: AppUpdates) => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} updates={updates} />)
+    await user.click(await screen.findByRole('button', { name: 'Settings' }))
+    return user
+  }
+
+  it('names the build the device is running', async () => {
+    await openSettings(fakeUpdates())
+
+    expect(screen.getByText('abc1234 · 2026-08-22 10:00Z')).toBeInTheDocument()
+  })
+
+  it('says so plainly when there is nothing newer', async () => {
+    const user = await openSettings(fakeUpdates())
+
+    await user.click(screen.getByRole('button', { name: 'Check for update' }))
+
+    expect(await screen.findByText(/on the latest build/)).toBeInTheDocument()
+  })
+
+  it('promises the reload rather than leaving you to guess', async () => {
+    const user = await openSettings(fakeUpdates({ check: async () => 'updating' }))
+
+    await user.click(screen.getByRole('button', { name: 'Check for update' }))
+
+    expect(await screen.findByText(/will reload itself/)).toBeInTheDocument()
+  })
+
+  /**
+   * A failed check must never read as a clean bill of health: the entire value
+   * of the button is being believed when it says you are current.
+   */
+  it('admits it could not reach the server', async () => {
+    const user = await openSettings(fakeUpdates({ check: async () => 'failed' }))
+
+    await user.click(screen.getByRole('button', { name: 'Check for update' }))
+
+    expect(await screen.findByText(/Couldn't reach the server/)).toBeInTheDocument()
+    expect(screen.queryByText(/on the latest build/)).not.toBeInTheDocument()
+  })
+
+  it('puts the reinstall behind a confirm, like every other destructive action', async () => {
+    const reinstall = vi.fn(async () => {})
+    const user = await openSettings(fakeUpdates({ reinstall }))
+
+    await user.click(screen.getByRole('button', { name: 'Reinstall app files' }))
+    expect(reinstall).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Reinstall' }))
+    expect(reinstall).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * A Wails shell has no service worker, so there is nothing to check and no
+   * cache to clear. Offering the buttons anyway would be offering a lie.
+   */
+  it('is absent entirely where there is nothing to update', async () => {
+    await openSettings(undefined)
+
+    expect(screen.queryByRole('button', { name: 'Check for update' })).not.toBeInTheDocument()
+    expect(screen.queryByText('App version')).not.toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { DEFAULT_SETTINGS, type Scoring, type Settings } from '../domain/types'
 import type { DataAdapter } from '../data/adapter'
+import type { AppUpdates, UpdateCheck } from '../lib/appUpdate'
 import { describeAge } from '../lib/format'
 
 /**
@@ -30,6 +31,7 @@ export function SettingsPane({
   adapter,
   scoutCalls,
   onKeyChange,
+  updates,
 }: {
   settings: Settings
   fetchedAt: number | null
@@ -39,6 +41,8 @@ export function SettingsPane({
   adapter: DataAdapter
   scoutCalls: number
   onKeyChange: () => void
+  /** Absent where there is no service worker to update — see `App`. */
+  updates?: AppUpdates
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [apiKey, setApiKey] = useState('')
@@ -151,6 +155,13 @@ export function SettingsPane({
         this session.
       </div>
 
+      {updates && (
+        <>
+          <hr />
+          <AppVersion updates={updates} />
+        </>
+      )}
+
       <hr />
 
       {confirmReset ? (
@@ -169,6 +180,81 @@ export function SettingsPane({
         </button>
       )}
     </div>
+  )
+}
+
+/** `idle` is "hasn't been asked yet", which is not the same as `current`. */
+type CheckState = 'idle' | 'checking' | UpdateCheck
+
+/**
+ * What the note under the button says. Split out so the copy is editable
+ * without touching the state machine, the same way `NextMove` keeps wording
+ * away from judgement.
+ */
+const CHECK_NOTE: Record<CheckState, string> = {
+  idle: 'Installed apps only look for new code when they are reopened, and iOS often skips that. This asks now.',
+  checking: 'Asking the server for a newer build…',
+  current: "You're on the latest build.",
+  updating: 'A newer build is downloading. The app will reload itself when it lands.',
+  failed: "Couldn't reach the server. Check the connection and try again.",
+  unsupported: 'This browser is not running the offline app, so a plain refresh already gets you the latest.',
+}
+
+/**
+ * "Which build am I on, and how do I get the new one?" — two questions a
+ * home-screen install could not answer, because it has no address bar to read
+ * and no refresh button to press. See `lib/appUpdate.ts` for why the automatic
+ * path needed help and why re-adding the icon is not an acceptable answer.
+ */
+function AppVersion({ updates }: { updates: AppUpdates }) {
+  const [state, setState] = useState<CheckState>('idle')
+  const [confirmReinstall, setConfirmReinstall] = useState(false)
+
+  const check = async () => {
+    setState('checking')
+    setState(await updates.check())
+  }
+
+  // `updating` stays disabled too: the reload is already on its way, and a
+  // second check in the meantime can only confuse the story.
+  const busy = state === 'checking' || state === 'updating'
+
+  return (
+    <>
+      <h3 className="pane-heading">App version</h3>
+      <div className="field-note">
+        Running build <strong>{updates.version}</strong>.
+      </div>
+      <button className="wide" onClick={check} disabled={busy}>
+        {state === 'checking' ? 'Checking…' : 'Check for update'}
+      </button>
+      <div className="field-note">{CHECK_NOTE[state]}</div>
+
+      {confirmReinstall ? (
+        <div className="danger-confirm">
+          <p>
+            Download the app again from scratch? Your picks, settings and API key
+            are stored separately and will survive.
+          </p>
+          <div className="danger-actions">
+            <button onClick={() => setConfirmReinstall(false)}>Cancel</button>
+            <button className="danger" onClick={() => void updates.reinstall()}>
+              Reinstall
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button className="wide danger-outline" onClick={() => setConfirmReinstall(true)}>
+          Reinstall app files
+        </button>
+      )}
+      <div className="field-note">
+        For when the check keeps saying you are up to date and you know a new
+        version shipped. Clears the cached app and fetches it fresh. This is the
+        one to reach for instead of deleting the home-screen icon, which takes
+        the draft with it.
+      </div>
+    </>
   )
 }
 
