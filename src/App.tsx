@@ -13,6 +13,7 @@ import { ScrollTopButton } from './components/ScrollTopButton'
 import { NextMove } from './components/NextMove'
 import { describeAge } from './lib/format'
 import { useStuck } from './lib/useStuck'
+import { useHeadHeight } from './lib/useHeadHeight'
 import { useScrollAnchor } from './lib/useScrollAnchor'
 import { useOnline } from './lib/useOnline'
 import { OP_POSITIONS } from './domain/lineup'
@@ -149,6 +150,9 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
   // showed up after one flick of the thumb would be noise. Short pages never
   // scroll this far, so it stays hidden on the roster and settings panes.
   const { sentinel: deepSentinel, stuck: scrolledDeep } = useStuck<HTMLDivElement>(700)
+  // Publishes this stack's height so the open row's header can pin directly
+  // under it — see useHeadHeight and `.row.expanded > .row-main`.
+  const headRef = useHeadHeight<HTMLDivElement>()
 
   // Hoisted out of the row map: fresh closures per row would defeat memo().
   const { clearPlayer } = draft
@@ -206,7 +210,7 @@ export default function App({ adapter: injected }: { adapter?: DataAdapter } = {
       {/* Budget bar and board controls share ONE sticky container. Sticking
           them separately would need the controls to know the header's exact
           height, which varies with wrapping and the roster-full notice. */}
-      <div className={`sticky-head ${stuck ? 'compact' : ''}`}>
+      <div ref={headRef} className={`sticky-head ${stuck ? 'compact' : ''}`}>
         <BudgetBar
           summary={draft.summary}
           onUndo={draft.undo}

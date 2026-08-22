@@ -177,6 +177,38 @@ describe('settings fields line up', () => {
   })
 })
 
+describe('the open row pins under the header', () => {
+  const root = postcss.parse(readFileSync('src/App.css', 'utf8'), { from: 'src/App.css' })
+
+  const pinned = new Map<string, string>()
+  root.walkRules((r) => {
+    if (r.selector.replace(/\s+/g, ' ').trim() !== '.row.expanded > .row-main') return
+    r.walkDecls((d) => {
+      pinned.set(d.prop, d.value)
+    })
+  })
+
+  it('offsets the pinned header by the custom property the hook publishes', () => {
+    // The name is agreed on across two files with nothing linking them: the
+    // hook writes it onto the root element, the sheet reads it. Rename one and
+    // the CSS falls back silently — valid, green, and the open player's header
+    // parks *under* the filter chips where you cannot read it.
+    const hook = readFileSync('src/lib/useHeadHeight.ts', 'utf8')
+    const declared = hook.match(/const VAR = '(--[\w-]+)'/)?.[1]
+
+    expect(declared).toBeTruthy()
+    expect(pinned.get('position')).toBe('sticky')
+    expect(pinned.get('top')).toContain(`var(${declared}`)
+  })
+
+  it('gives the pinned header something to cover its own card with', () => {
+    // Buttons are transparent by default here (see index.css), so without an
+    // opaque background the scout report reads straight through the name.
+    expect(pinned.get('background')).toBeTruthy()
+    expect(pinned.get('background')).not.toBe('none')
+  })
+})
+
 describe('class references', () => {
   it('every class used in a component has a rule, and vice versa', async () => {
     // Not enforced as an assertion — unused rules are cheap and some classes

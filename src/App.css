@@ -454,6 +454,39 @@
   text-align: left;
 }
 
+/* ---- the open card's header latches under the sticky head ---- */
+
+/* An open card — bio, season stats, a scout report — is taller than the phone,
+   and once its header has scrolled off there is nothing left on screen saying
+   who you are reading about. So the *open* row's header pins beneath the
+   header stack while you scroll its card.
+
+   The containing block is the row's own <li>, which is what makes this need no
+   scroll state and no JS: it latches only once the card's top would have gone
+   past, and lets go by itself as the card's bottom arrives — so it can never
+   outlive the content it labels. `--head-h` is the measured height of the
+   stack above it (see useHeadHeight); the fallback pins to the top of the
+   viewport rather than not pinning at all, wherever that measurement is
+   unavailable. */
+.row.expanded > .row-main {
+  position: sticky;
+  top: var(--head-h, 0px);
+  /* Over the rows scrolling under it, under the header stack's 20. */
+  z-index: 5;
+  /* Opaque, or the card below reads straight through the pinned name. */
+  background: var(--bg);
+  box-shadow: 0 1px 0 var(--line);
+}
+
+/* Taken rows are dimmed to sit back in the list, and that dimming is opacity —
+   which would make this header translucent and let its own card scroll through
+   it. The open row is the one being read, so it comes back to full strength;
+   the strikethrough and the `Mine · $N` badge still say what it is. */
+.row.expanded.gone > .row-main,
+.row.expanded.mine > .row-main {
+  opacity: 1;
+}
+
 /* Fixed width so rank, position and every name below start on straight
    vertical edges — the list is scanned down, not read across. */
 .row-gutter {
