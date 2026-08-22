@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS } from './domain/types'
 import type { ChatTurn, DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
 import type { AppUpdates } from './lib/appUpdate'
+import { formatBuildTime } from './lib/format'
 import { makePlayer, makeProfile, makeReport } from './test/factories'
 
 const player = (id: number, name: string, rank: number, position = 'RB'): Player =>
@@ -252,7 +253,10 @@ describe('draft board end to end', () => {
 
   it('keeps the board usable when ESPN is unreachable', async () => {
     const adapter = new FakeAdapter()
-    adapter.rankings = { players: ROSTER, scoring: 'PPR', fetchedAt: Date.now() }
+    // Tracks the default rather than naming a format: a cache saved under
+    // different scoring is deliberately ignored, so pinning 'PPR' here would
+    // turn a change of default into an unexplained empty board.
+    adapter.rankings = { players: ROSTER, scoring: DEFAULT_SETTINGS.scoring, fetchedAt: Date.now() }
     adapter.fetchRankings = async () => {
       throw new Error('offline')
     }
@@ -405,7 +409,7 @@ describe('draft board end to end', () => {
     expect(getRow('Ladd McConkey').closest('.row')!.querySelector('.row-bye')).toBeNull()
   })
 
-  it('plans the roster’s bye weeks and marks the ones the bench can’t cover', async () => {
+  it('marks every roster row a bye week leaves uncovered', async () => {
     const user = userEvent.setup()
     const adapter = new FakeAdapter()
     adapter.fetchRankings = async () => [
@@ -428,98 +432,15 @@ describe('draft board end to end', () => {
     await findRow('Ladd McConkey')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
-    // Week 5 takes both starters with nobody behind them; week 9 takes one.
-    const weeks = [...document.querySelectorAll('.bye-plan-row')].map((r) => r.textContent)
-    expect(weeks[0]).toContain('Wk 5')
-    // Named, not counted: the slots that go dark say what to go shopping for.
-    expect(weeks[0]).toContain('RB, WR uncovered')
-    expect(weeks[0]).toContain('Jahmyr Gibbs, Puka Nacua')
-    expect(weeks[1]).toContain('Wk 9')
-    expect(weeks[1]).toContain('QB uncovered')
-
-    // The same verdict reaches the player it's about, so you don't have to
-    // hold the week in your head while reading down the lineup.
-    const gibbs = screen.getByText('Jahmyr Gibbs').closest('.roster-row') as HTMLElement
-    expect(within(gibbs).getByText('Bye 5').className).toContain('clash')
-  })
-
-  it('folds the covered bye weeks away until asked for the full story', async () => {
-    const user = userEvent.setup()
-    const adapter = new FakeAdapter()
-    // Four backs: three start (RB, RB, OP) and one sits on the bench, which is
-    // what makes week 5 genuinely covered and week 9 genuinely not.
-    adapter.fetchRankings = async () => [
-      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
-      { ...player(2, 'Bijan Robinson', 2), byeWeek: 9 },
-      { ...player(3, 'Saquon Barkley', 3), byeWeek: 9 },
-      { ...player(4, 'De\'Von Achane', 4), byeWeek: 9 },
-      { ...player(5, 'Ladd McConkey', 5, 'WR') }, // unowned, so the board has a row
-    ]
-    adapter.draft = {
-      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
-      log: [
-        { playerId: 1, status: 'mine', price: 40, at: 0 },
-        { playerId: 2, status: 'mine', price: 35, at: 1 },
-        { playerId: 3, status: 'mine', price: 30, at: 2 },
-        { playerId: 4, status: 'mine', price: 25, at: 3 },
-      ],
-    }
-    render(<App adapter={adapter} />)
-    await findRow('Ladd McConkey')
-    await user.click(screen.getByRole('button', { name: 'My team' }))
-
-    // Only the week that costs a starting slot. Week 5 is covered, and a
-    // reassuring row above a fifteen-row lineup would push this one off screen.
-    const weeks = () => [...document.querySelectorAll('.bye-plan-row')].map((r) => r.textContent)
-    expect(weeks()).toHaveLength(1)
-    expect(weeks()[0]).toContain('Wk 9')
-
-    const toggle = screen.getByRole('button', { name: /1 covered/ })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-
-    await user.click(toggle)
-    expect(weeks()).toHaveLength(2)
-    expect(weeks()[1]).toContain('Wk 5')
-    expect(weeks()[1]).toContain('bench covers')
-
-    // And back again.
-    await user.click(screen.getByRole('button', { name: /Hide covered/ }))
-    expect(weeks()).toHaveLength(1)
-  })
-
-  it('says so plainly when every bye week is covered', async () => {
-    const user = userEvent.setup()
-    const adapter = new FakeAdapter()
-    // Four backs for three back-shaped slots, every bye in a different week:
-    // whoever is off, the spare covers, so nothing is ever alerting.
-    adapter.fetchRankings = async () => [
-      { ...player(1, 'Jahmyr Gibbs', 1), byeWeek: 5 },
-      { ...player(2, 'Bijan Robinson', 2), byeWeek: 9 },
-      { ...player(3, 'Saquon Barkley', 3), byeWeek: 11 },
-      { ...player(4, 'De\'Von Achane', 4), byeWeek: 13 },
-      { ...player(5, 'Ladd McConkey', 5, 'WR') }, // unowned, so the board has a row
-    ]
-    adapter.draft = {
-      settings: { budget: 200, slots: 16, scoring: 'PPR', teamCount: 12, prewarmDepth: 0 },
-      log: [
-        { playerId: 1, status: 'mine', price: 40, at: 0 },
-        { playerId: 2, status: 'mine', price: 35, at: 1 },
-        { playerId: 3, status: 'mine', price: 30, at: 2 },
-        { playerId: 4, status: 'mine', price: 25, at: 3 },
-      ],
-    }
-    render(<App adapter={adapter} />)
-    await findRow('Ladd McConkey')
-    await user.click(screen.getByRole('button', { name: 'My team' }))
-
-    // A bare heading would read as a section that failed to load.
-    expect(document.querySelectorAll('.bye-plan-row')).toHaveLength(0)
-    expect(screen.getByText('Every bye week is covered.')).toBeInTheDocument()
-
-    // The full story is still there for the asking.
-    await user.click(screen.getByRole('button', { name: /4 covered/ }))
-    expect(document.querySelectorAll('.bye-plan-row')).toHaveLength(4)
-    expect(screen.queryByText('Every bye week is covered.')).not.toBeInTheDocument()
+    // Week 5 takes both starters with nobody behind them, and week 9 takes the
+    // quarterback: three rows, three slots that go dark, three flagged chips.
+    // The verdict reaches the player it's about, which is the whole story now
+    // that there's no summary above the lineup to read it off.
+    const rosterRow = (name: string) =>
+      screen.getByText(name).closest('.roster-row') as HTMLElement
+    expect(within(rosterRow('Jahmyr Gibbs')).getByText('Bye 5').className).toContain('clash')
+    expect(within(rosterRow('Puka Nacua')).getByText('Bye 5').className).toContain('clash')
+    expect(within(rosterRow('Josh Allen')).getByText('Bye 9').className).toContain('clash')
   })
 
   it('flags only the position a bye week is actually short at', async () => {
@@ -549,19 +470,10 @@ describe('draft board end to end', () => {
     await findRow('Josh Allen')
     await user.click(screen.getByRole('button', { name: 'My team' }))
 
-    // The headline is about the back, so the line beneath it is too: naming
-    // the covered receiver there reads as though he were half the problem.
-    // Week 11 takes three receivers at once and sorts above this one, so pick
-    // the row by its week rather than by position in the list.
-    const week6 = [...document.querySelectorAll('.bye-plan-row')].find((r) =>
-      r.textContent?.includes('Wk 6'),
-    )!
-    expect(week6.textContent).toContain('RB uncovered')
-    expect(week6.textContent).toContain('Jahmyr Gibbs · +1 covered')
-    expect(week6.textContent).not.toContain('Puka Nacua')
-
     // Same week, same chip, opposite verdict — because the receiver has three
-    // bodies behind him and the back has none.
+    // bodies behind him and the back has none. Flagging both would say the
+    // receiver was half the problem, which is what a week-level count does and
+    // what asking `uncoveredPositions` per player avoids.
     const gibbs = screen.getByText('Jahmyr Gibbs').closest('.roster-row') as HTMLElement
     const nacua = screen.getByText('Puka Nacua').closest('.roster-row') as HTMLElement
     expect(within(gibbs).getByText('Bye 6').className).toContain('clash')
@@ -1505,7 +1417,8 @@ describe('the settings number fields', () => {
  */
 describe('the app version section', () => {
   const fakeUpdates = (overrides: Partial<AppUpdates> = {}): AppUpdates => ({
-    version: 'abc1234 · 2026-08-22 10:00Z',
+    version: 'abc1234',
+    builtAt: '2026-08-22T14:00:00.000Z',
     check: async () => 'current',
     reinstall: async () => {},
     ...overrides,
@@ -1521,7 +1434,39 @@ describe('the app version section', () => {
   it('names the build the device is running', async () => {
     await openSettings(fakeUpdates())
 
-    expect(screen.getByText('abc1234 · 2026-08-22 10:00Z')).toBeInTheDocument()
+    expect(screen.getByText('abc1234')).toBeInTheDocument()
+  })
+
+  /*
+   * The stamp reaches the app as a UTC instant and has to leave it as the
+   * phone's own clock — nobody mid-draft converts a Z-suffixed time in their
+   * head to decide whether they are on the build that just shipped. Asserted
+   * against `formatBuildTime` rather than a literal so the test doesn't depend
+   * on the zone the suite happens to run in; `format.test.ts` pins a zone and
+   * checks the shift itself.
+   */
+  it('shows when that build was made, in the time the reader keeps', async () => {
+    await openSettings(fakeUpdates())
+
+    /*
+     * `toHaveTextContent` collapses whitespace on the DOM side only, so the
+     * expected string has to be collapsed by hand: ICU 72–77 (Node 20) puts a
+     * narrow no-break space before AM/PM, which the DOM side would flatten to a
+     * plain space and this side would keep — a mismatch on Node versions this
+     * machine doesn't happen to run.
+     */
+    const built = formatBuildTime('2026-08-22T14:00:00.000Z')!.replace(/\s+/g, ' ')
+    expect(screen.getByText('abc1234').parentElement).toHaveTextContent(
+      `Running build abc1234, built ${built}.`,
+    )
+  })
+
+  it('says only the build number when there is no usable timestamp', async () => {
+    await openSettings(fakeUpdates({ builtAt: '' }))
+
+    expect(screen.getByText('abc1234').parentElement).toHaveTextContent(
+      'Running build abc1234.',
+    )
   })
 
   it('says so plainly when there is nothing newer', async () => {
@@ -1530,6 +1475,24 @@ describe('the app version section', () => {
     await user.click(screen.getByRole('button', { name: 'Check for update' }))
 
     expect(await screen.findByText(/on the latest build/)).toBeInTheDocument()
+  })
+
+  /**
+   * The note is empty in `idle` and `checking`, but it still has to occupy its
+   * line. Rendering it conditionally made an element with no height, so the
+   * Check and Reinstall buttons sat touching on first open and sprang apart the
+   * moment a check reported back. It is the same node throughout — the space is
+   * reserved in `.update-note`, which a jsdom test cannot measure.
+   */
+  it('keeps the note in place between the buttons before any check has run', async () => {
+    const user = await openSettings(fakeUpdates())
+
+    const note = document.querySelector('.update-note')
+    expect(note).toBeEmptyDOMElement()
+
+    await user.click(screen.getByRole('button', { name: 'Check for update' }))
+
+    await waitFor(() => expect(note).toHaveTextContent(/on the latest build/))
   })
 
   it('promises the reload rather than leaving you to guess', async () => {

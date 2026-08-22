@@ -54,7 +54,19 @@ describe('buildReference', () => {
   it('states the league setup', () => {
     const ref = buildReference(build())
     expect(ref).toContain('12 teams, $200 auction budget each, 15 roster spots each')
-    expect(ref).toContain('Scoring: PPR')
+  })
+
+  /**
+   * Named explicitly rather than read off `DEFAULT_SETTINGS`: which format is
+   * the default is a product decision that has already changed once, and a
+   * test that follows it silently stops checking that the setting reaches the
+   * prompt at all.
+   */
+  it('tells the model which scoring format it is looking at', () => {
+    for (const scoring of ['PPR', 'STANDARD'] as const) {
+      const ref = buildReference(build([], { ...DEFAULT_SETTINGS, scoring }))
+      expect(ref).toContain(`Scoring: ${scoring}`)
+    }
   })
 
   it('spells out that OP makes this superflex, since the label does not', () => {

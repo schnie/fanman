@@ -810,6 +810,19 @@
    without moving anything. */
 .row-detail {
   animation: detail-in 150ms ease-out;
+  /* The card's own top margin. `.row-main`'s 12px bottom padding was measured
+     for a collapsed row sitting in a list, where the next thing below it is
+     another row; on an open card it is the gap between a header and the first
+     line of the thing it heads. Once that header pins, the card opens with the
+     bio jammed against a hairline directly under the sticky stack — two rules
+     and a line of text inside 12px, at the top of the screen.
+
+     Spacing the *content* down, rather than pinning the row header lower with
+     `calc(var(--head-h) + …)`: the pin line is the underside of an opaque
+     stack, and any offset there is a window onto the rows still scrolling
+     behind it — the same sliver `useHeadHeight` rounds its measurement up to
+     avoid. The gap belongs inside the card, where nothing passes through it. */
+  padding-top: 8px;
 }
 
 @keyframes detail-in {
@@ -964,121 +977,6 @@
   flex-wrap: wrap;
 }
 
-
-/* The bye plan: which weeks the roster is off, and whether the bench covers
-   them. Sits between the summary and the lineup because it is read between
-   nominations, and the lineup below it is fifteen rows deep on a phone. */
-.bye-plan {
-  padding: 4px 0 10px;
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 8px;
-}
-
-.bye-plan-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-/* Folds the covered weeks away. Sits on the heading's baseline so the section
-   reads as one line, and carries its own padding: a 12px label is a miserable
-   tap target on a phone otherwise. */
-.bye-plan-toggle {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  padding: 4px 2px;
-  margin: -4px 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.bye-plan-caret {
-  font-size: 9px;
-}
-
-/* Stands in for the list when nothing is alerting and nothing is expanded —
-   a bare heading reads as a section that failed to load. */
-.bye-plan-clear {
-  margin: 0;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.bye-plan-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--muted);
-}
-
-.bye-plan-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.bye-plan-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-
-.bye-plan-week {
-  flex: 0 0 auto;
-  /* Same width for "Wk 5" and "Wk 14", so the verdicts line up in a column
-     you can scan instead of a ragged left edge. */
-  width: 44px;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 0;
-  text-align: center;
-  border-radius: 4px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.bye-plan-row.short .bye-plan-week {
-  background: var(--tint-amber);
-  color: var(--amber);
-}
-
-.bye-plan-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.bye-plan-verdict {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.bye-plan-row.short .bye-plan-verdict {
-  color: var(--amber);
-}
-
-/* Names are the supporting evidence, not the point — one line, truncated. */
-.bye-plan-names {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .roster-row {
   display: flex;
   align-items: center;
@@ -1227,6 +1125,18 @@
 .field-note a {
   color: var(--accent);
   text-decoration: underline;
+}
+
+/*
+ * The update check's note is empty in two of its six states, and an element
+ * with no text has no height, so the Check and Reinstall buttons closed the
+ * gap between them on first open and reopened it the moment a check reported
+ * back. Reserving one line keeps the section still. The number mirrors
+ * `.field-note` above — one line at its line-height plus its own padding,
+ * which `box-sizing: border-box` folds into the min-height.
+ */
+.update-note {
+  min-height: calc(1.5em + 24px);
 }
 
 .wide {

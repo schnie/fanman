@@ -140,7 +140,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // The ten starting slots in `STARTER_SLOTS` — including this league's extra
   // head-coach slot — plus five on the bench.
   slots: 15,
-  scoring: 'PPR',
+  scoring: 'STANDARD',
   teamCount: 12,
   // Five is roughly what turns over between nominations, so a verdict is
   // usually waiting without paying for a queue the draft never reaches.

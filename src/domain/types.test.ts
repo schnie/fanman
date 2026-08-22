@@ -22,6 +22,10 @@ describe('DEFAULT_SETTINGS', () => {
     expect(DEFAULT_SETTINGS.slots).toBe(15)
     expect(DEFAULT_SETTINGS.teamCount).toBe(12)
     expect(DEFAULT_SETTINGS.prewarmDepth).toBe(5)
+    // Standard, not PPR: the scoring here is the one thing that changes which
+    // auction values ESPN hands back, so a wrong default prices the whole
+    // board before anyone opens Settings.
+    expect(DEFAULT_SETTINGS.scoring).toBe('STANDARD')
   })
 
   it('leaves room for every starting slot plus a bench', () => {
