@@ -196,14 +196,18 @@ type ReinstallState = 'idle' | 'confirm' | 'working' | 'failed'
  * What the note under the button says. Split out so the copy is editable
  * without touching the state machine, the same way `NextMove` keeps wording
  * away from judgement.
+ *
+ * Empty means the button already says it: `idle` is what "Check for update"
+ * is for, and `checking` is what "Checking…" says. Only the outcomes — which
+ * the button cannot show — get a sentence.
  */
 const CHECK_NOTE: Record<CheckState, string> = {
-  idle: 'Installed apps only look for new code when they are reopened, and iOS often skips that. This asks now.',
-  checking: 'Asking the server for a newer build…',
+  idle: '',
+  checking: '',
   current: "You're on the latest build.",
-  updating: 'A newer build is downloading. The app will reload itself when it lands.',
-  failed: "Couldn't reach the server. Check the connection and try again.",
-  unsupported: 'This browser is not running the offline app, so a plain refresh already gets you the latest.',
+  updating: 'A new build is downloading. The app will reload itself.',
+  failed: "Couldn't reach the server. Try again.",
+  unsupported: 'Not running as an installed app — a refresh gets the latest.',
 }
 
 /**
@@ -251,14 +255,11 @@ function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean 
       <button className="wide" onClick={check} disabled={busy}>
         {state === 'checking' ? 'Checking…' : 'Check for update'}
       </button>
-      <div className="field-note">{CHECK_NOTE[state]}</div>
+      {CHECK_NOTE[state] && <div className="field-note">{CHECK_NOTE[state]}</div>}
 
       {reinstall === 'confirm' ? (
         <div className="danger-confirm">
-          <p>
-            Download the app again from scratch? Your picks, settings and API key
-            are stored separately and will survive.
-          </p>
+          <p>Download the app again from scratch? Your draft is kept.</p>
           <div className="danger-actions">
             <button onClick={() => setReinstall('idle')}>Cancel</button>
             <button className="danger" onClick={runReinstall}>
@@ -287,14 +288,20 @@ function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean 
   )
 }
 
+/**
+ * Two of these three still earn their sentence: a failure and a disabled
+ * button both leave the reader with a question the label cannot answer. The
+ * idle line stays because "reinstall" alone doesn't say the draft survives —
+ * the fear that sends people to delete the icon instead.
+ */
 function reinstallNote(online: boolean, state: ReinstallState): string {
   if (state === 'failed') {
-    return 'Could not clear the cached app — this browser may be blocking storage. Try again, or reopen the app from the home screen.'
+    return 'Could not clear the cached app. Try again.'
   }
   if (!online) {
-    return 'Needs a connection: this deletes the cached app before fetching it again, so offline it would leave nothing to run.'
+    return 'Needs a connection — this downloads the app again.'
   }
-  return 'For when the check keeps saying you are up to date and you know a new version shipped. Clears the cached app and fetches it fresh. Reach for this instead of deleting the home-screen icon, which takes the draft with it.'
+  return 'Downloads the app fresh when a check keeps saying you are current. Your draft is kept.'
 }
 
 /**
