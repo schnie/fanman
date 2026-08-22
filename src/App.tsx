@@ -506,6 +506,14 @@ export default function App({
             else draft.markGone(sheet.player.id, price)
             setSheet(null)
             setExpandedId(null)
+            // A search is how you got to this player, and the moment the
+            // gavel falls it is stale: the board underneath is one row long
+            // and the phone keyboard is still covering half of it. Clear it
+            // and blur, so the next thing you see is the whole board — the
+            // opposite of the ✕ button, which keeps focus because clearing
+            // there is a prelude to typing the next name.
+            setQuery('')
+            searchInput.current?.blur()
           }}
         />
       )}
