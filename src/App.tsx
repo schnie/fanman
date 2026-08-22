@@ -11,6 +11,7 @@ import { PlayerRow } from './components/PlayerRow'
 import { BidSheet } from './components/BidSheet'
 import { Roster } from './components/Roster'
 import { SettingsPane } from './components/SettingsPane'
+import { DraftLog } from './components/DraftLog'
 import { ScrollTopButton } from './components/ScrollTopButton'
 import { NextMove } from './components/NextMove'
 import { ChatPane } from './components/ChatPane'
@@ -34,6 +35,10 @@ const TABS = [
   ['board', 'Board'],
   ['roster', 'My team'],
   ['ask', 'Ask'],
+  // After the three you use while a name is being called, before Settings:
+  // the log changes nothing and costs nothing, and is read between
+  // nominations — usually by someone else holding the phone.
+  ['log', 'Log'],
   ['settings', 'Settings'],
 ] as const
 type Tab = (typeof TABS)[number][0]
@@ -475,6 +480,13 @@ export default function App({
           onNewTopic={chat.newTopic}
         />
       )}
+
+      {/* Unmounted between tabs, like Settings and the Ask pane: the log has
+          no avatars, so there are no decoded images to throw away — the reason
+          the board and the roster stay mounted does not apply here. It reads
+          the append-only log straight off the draft, so there is no state to
+          lose either. */}
+      {tab === 'log' && <DraftLog log={draft.state.log} players={players} />}
 
       {tab === 'settings' && (
         <SettingsPane

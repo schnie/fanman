@@ -44,6 +44,7 @@ exceeds it.
 ```
 src/
   domain/       pure logic, no I/O — types, budget, lineup, market, nomination,
+                draftLog (the picks, in the order they happened),
                 chatContext (the draft, serialised for a model)
   data/         DataAdapter interface + browser implementation, ESPN/FPI/Anthropic clients
   components/   presentational; state comes down as props
@@ -304,6 +305,17 @@ flagged every row with a number that meant nothing. Per-player flags ask
 and using it gold-flagged every player off in a week that was short at one
 position. `uncoveredPositions` comes from the empty slot's `accepts` list, so
 the superflex OP slot implicates every position it would have taken.
+
+**A player can appear in the draft log twice, and the Log tab has to know it.**
+Recording a sale price after the fact appends rather than edits — that is what
+keeps `log` append-only and undo a pop — so `domain/draftLog.ts` collapses per
+player: the *first* mention fixes the position in the order, because that is
+when the room took them, and the *last* one supplies status and price. Order by
+the correction instead and a player jumps twenty picks forward for having their
+price filled in late. Numbering happens before the reversal, since the list
+reads newest-first while the count runs from the start of the draft. A player
+the current board can't name keeps their row and their number — the draft
+outlives any one board, and a gap in the sequence is worse than an unnamed row.
 
 **Team entities are synthetic.** D/ST and head coaches have negative ids and no
 athlete record behind them. Ask `isTeamEntity(id)` from `data/proTeams.ts` — never

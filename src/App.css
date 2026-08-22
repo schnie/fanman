@@ -407,7 +407,8 @@
 }
 
 .board,
-.roster-list {
+.roster-list,
+.log-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1196,6 +1197,79 @@ hr {
   font-weight: 600;
 }
 
+/* ---------- draft log ---------- */
+
+/* Deliberately close to `.roster-row`: both are read straight down as a list
+   of people, so they keep the same rhythm — 9px padding around a chip column,
+   name in the middle, price hard right.
+
+   What the log does NOT borrow is the board's strikethrough for a player who
+   is gone. There, being crossed off is the exception the eye is looking for;
+   here every single row is someone off the board, so striking them all through
+   would dim the whole list to say nothing. Ours are marked instead. */
+.log-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px 9px 5px;
+  border-bottom: 1px solid var(--line);
+  /* Held even on rows that aren't ours, so the green edge below lands in the
+     gutter instead of shifting a name 3px right. */
+  border-left: 3px solid transparent;
+}
+
+/* The board's mark for a player we won, so "ours" reads the same in both. */
+.log-row.mine {
+  border-left-color: var(--green);
+}
+
+/* The pick's number in the room's conversation — "he went 14th". Tabular so
+   the chips after it stay on one straight edge as the count passes 9 and 99,
+   and quiet, because it is an index, not the content. */
+.log-num {
+  flex: 0 0 auto;
+  min-width: 24px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.log-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* Only the name may truncate — same rule as the board and the roster, and it
+   needs `min-width: 0` for the same reason: an item's automatic minimum size
+   is its whole content, so without it the name refuses to shrink and pushes
+   the price off the row instead. */
+.log-player {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-price {
+  flex: 0 0 auto;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* What we paid is the number we came here to check. */
+.log-row.mine .log-price {
+  color: var(--green);
+}
+
 /* ---------- tab bar ---------- */
 
 .tabs {
@@ -1221,6 +1295,16 @@ hr {
 .tabs button.on {
   color: var(--accent);
   box-shadow: inset 0 2px 0 var(--accent);
+}
+
+/* Five tabs share the width now, and the labels are single words that can only
+   overflow — there is nowhere for "Settings" to wrap to. At 320px each tab has
+   ~64px, which the 14px semibold face fills to the pixel, so the smallest
+   phones step the labels down rather than clip them. */
+@media (max-width: 360px) {
+  .tabs button {
+    font-size: 13px;
+  }
 }
 
 /* ---------- scroll to top ---------- */
