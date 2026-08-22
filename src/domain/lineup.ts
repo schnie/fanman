@@ -12,8 +12,9 @@ export interface LineupSlot {
  * What this league's OP ("offensive player") slot will take — any offensive
  * skill position, **including quarterback**. That makes it superflex-shaped
  * rather than a normal FLEX, which matters well beyond the label: a second
- * startable QB slot raises quarterback value sharply, and ESPN's PPR ranks
- * assume a one-QB league, so they systematically under-price QBs here.
+ * startable QB slot raises quarterback value sharply, and ESPN's ranks — in
+ * either scoring format — assume a one-QB league, so they systematically
+ * under-price QBs here.
  *
  * Exported because the board's OP filter must agree with the lineup builder —
  * one edit, not two that can silently drift apart.
