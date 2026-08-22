@@ -124,6 +124,14 @@ superflex version of it to fetch. So the market figure reads low here, hardest
 at QB. It is still shown — it is real data about real drafts — with the caveat
 spelled out on the bid sheet, where the number turns into a bid.
 
+That caveat carries a **measured** figure, not a stated one: the bid sheet takes
+a median across the position you are bidding on, off the board you are actually
+holding, and says so — *"reads 22% of book at QB"*. Skill positions read the
+other way (~126% at RB), because a format that starts two quarterbacks moves
+money onto them and off everyone else. Settings shows the QB figure, since it
+has no player in front of it. Nothing is hardcoded; this app runs once a year
+and a number written down in one August is wrong by the next.
+
 Because the two are quoted in different formats, the book-versus-market gap
 **is not computed under superflex**. Under a one-QB book that gap is the useful
 signal, showing where the market is paying over or under book; under superflex

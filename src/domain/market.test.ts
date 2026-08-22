@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   displayRoomPrice,
+  GAP_MIN_SAMPLE,
   inflationIsMeaningful,
+  marketVsBookPct,
   positionTier,
   roomPrice,
   summarizeMarket,
@@ -280,5 +282,70 @@ describe('positionTier', () => {
       makePlayer({ id: i + 1, position: 'QB', marketValue: 30 - i * 0.1, espnValue: 30 }),
     )
     expect(positionTier(flat, flat[0])).toHaveLength(8)
+  })
+})
+
+describe('marketVsBookPct', () => {
+  /** `n` quarterbacks whose market value is `pct`% of a $40 book. */
+  const qbs = (n: number, pct: number): Player[] =>
+    Array.from({ length: n }, (_, i) =>
+      makePlayer({ id: i + 1, position: 'QB', espnValue: 40, marketValue: 40 * (pct / 100) }),
+    )
+
+  it('reports the market column as a percentage of book', () => {
+    expect(marketVsBookPct(qbs(9, 25), 'SUPERFLEX', 'QB')).toBe(25)
+    expect(marketVsBookPct(qbs(9, 115), 'SUPERFLEX', 'QB')).toBe(115)
+  })
+
+  it('answers for the position asked about, not for the board', () => {
+    const board = [
+      ...qbs(6, 25),
+      ...Array.from({ length: 6 }, (_, i) =>
+        makePlayer({ id: 100 + i, position: 'WR', espnValue: 40, marketValue: 46 }),
+      ),
+    ]
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'QB')).toBe(25)
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'WR')).toBe(115)
+  })
+
+  // The deep end of every position is $1 players carrying a $20-odd book value,
+  // and a mean lets one of them move the answer several points.
+  it('takes a median, so one deep-bench outlier cannot move it', () => {
+    const board = qbs(9, 25)
+    board[0] = makePlayer({ ...board[0], espnValue: 30, marketValue: 1 })
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'QB')).toBe(25)
+  })
+
+  it('averages the two middles on an even sample', () => {
+    const board = [...qbs(3, 20), ...qbs(3, 30).map((p) => ({ ...p, id: p.id + 50 }))]
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'QB')).toBe(25)
+  })
+
+  // Under a one-QB book this gap is the ordinary market-over-book premium,
+  // which `marketPremium` already reports per player. A second, board-wide
+  // reading of the same thing would only invite the two to disagree.
+  it('has nothing to say when the two columns share a format', () => {
+    expect(marketVsBookPct(qbs(9, 25), 'PPR', 'QB')).toBeUndefined()
+    expect(marketVsBookPct(qbs(9, 25), 'STANDARD', 'QB')).toBeUndefined()
+  })
+
+  it('refuses a median too thin to mean anything', () => {
+    expect(marketVsBookPct(qbs(GAP_MIN_SAMPLE - 1, 25), 'SUPERFLEX', 'QB')).toBeUndefined()
+    expect(marketVsBookPct(qbs(GAP_MIN_SAMPLE, 25), 'SUPERFLEX', 'QB')).toBe(25)
+  })
+
+  // Head coaches carry a derived value and no ESPN price at all; a $0 book
+  // would divide to Infinity and a $0 market would drag the median to zero.
+  it('ignores players ESPN never priced', () => {
+    const board = [
+      ...qbs(GAP_MIN_SAMPLE, 25),
+      makePlayer({ id: 900, position: 'QB', espnValue: 0, marketValue: 0, derivedValue: 3 }),
+      makePlayer({ id: 901, position: 'QB', espnValue: 0, marketValue: 12 }),
+    ]
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'QB')).toBe(25)
+  })
+
+  it('says nothing about a position that is not on the board', () => {
+    expect(marketVsBookPct(qbs(9, 25), 'SUPERFLEX', 'TE')).toBeUndefined()
   })
 })

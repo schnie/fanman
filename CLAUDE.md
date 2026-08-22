@@ -241,6 +241,17 @@ leader, the one player that function exists to skip. The market figure is still
 shown, with the caveat visible on the bid sheet rather than in a tooltip a
 phone cannot reach.
 
+The caveat's number is **measured, never a constant**. `marketVsBookPct` takes
+a median of `marketValue / espnValue` across one position on the loaded board —
+about 22% at QB and 126% at RB as of writing. A percentage baked into the
+source would be a confident lie a year later, on an app that runs once a year,
+with nothing in the UI to say so. Median rather than mean because the deep end
+of every position is $1 players carrying a $20-odd book value; undefined below
+`GAP_MIN_SAMPLE` because a median over three rows is printed here as a fact
+about the format. The live test bounds it loosely on the real board, so the day
+ESPN starts publishing superflex ownership values it fails — which is the news
+we would want, since the caveat and this function would both be wrong.
+
 `DEFAULT_SETTINGS` only reaches a device with nothing stored, so
 `migrateSettings` corrects a saved draft on load — but **only before the draft
 opens**. Switching the book invalidates the rankings cache (it is keyed on

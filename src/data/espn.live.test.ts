@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { fetchRankings } from './espn'
+import { marketVsBookPct } from '../domain/market'
 
 /**
  * Hits ESPN and the FPI endpoint for real. Opt-in so the normal suite stays
@@ -44,6 +45,22 @@ live('ESPN live endpoints', () => {
     // Ranks are sparse in this book — 1, 3, 5, 7, 8, … — so nothing may assume
     // they run consecutively. Sorted, yes; dense, no.
     expect(ranked.at(-1)!.rank).toBeGreaterThanOrEqual(ranked.length)
+
+    // The gap the bid-sheet caveat is measured from, checked against the real
+    // board. It is deliberately a loose bound: the point is not the exact
+    // figure (~23% as of writing) but that ESPN's market column is still a
+    // one-QB average. Should ESPN ever start publishing superflex ownership
+    // values this fails — which is the good news we would want to hear, since
+    // the caveat and `marketVsBookPct` would both be wrong that day.
+    const qbGap = marketVsBookPct(board, 'SUPERFLEX', 'QB')
+    expect(qbGap).toBeDefined()
+    expect(qbGap!).toBeLessThan(60)
+    // The mirror: skill positions read high against the same book, because a
+    // format starting two QBs moves money onto them and off everyone else.
+    expect(marketVsBookPct(board, 'SUPERFLEX', 'RB')!).toBeGreaterThan(100)
+    console.log(
+      `market vs superflex book — QB ${qbGap}%, RB ${marketVsBookPct(board, 'SUPERFLEX', 'RB')}%`,
+    )
 
     // --- coaches: unpriced by ESPN, valued by us, and always last ---
     expect(coaches).toHaveLength(32)

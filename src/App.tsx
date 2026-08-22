@@ -22,7 +22,7 @@ import { useOnline } from './lib/useOnline'
 import { OP_POSITIONS } from './domain/lineup'
 import { byeCounts } from './domain/byes'
 import { wonPicksFrom } from './domain/budget'
-import { displayRoomPrice, summarizeMarket } from './domain/market'
+import { displayRoomPrice, marketVsBookPct, summarizeMarket } from './domain/market'
 import { suggestNomination } from './domain/nomination'
 import { buildChatContext } from './domain/chatContext'
 import { teamAbbr } from './data/proTeams'
@@ -83,6 +83,26 @@ export default function App({
     () => summarizeMarket(players, draft.picks, draft.state.settings),
     [players, draft.picks, draft.state.settings],
   )
+
+  /**
+   * How far the market column sits from the book, per position, on the board
+   * we are actually holding. Keyed by position rather than computed per player
+   * because it is a fact about the format and the board, not about anyone in
+   * particular — and because the bid sheet and Settings must not each grow
+   * their own idea of the number.
+   *
+   * Deliberately not in `market`: that summary moves on every pick, and this
+   * moves only when the board is refetched.
+   */
+  const marketGap = useMemo(() => {
+    const scoring = draft.state.settings.scoring
+    return new Map<string, number | undefined>(
+      FILTERS.filter((f) => f !== 'ALL' && f !== 'OP').map((pos) => [
+        pos,
+        marketVsBookPct(players, scoring, pos),
+      ]),
+    )
+  }, [players, draft.state.settings.scoring])
 
   // Who to throw out next, and whether we're draining the room or buying.
   // Derived from the same market and budget numbers the header shows, so the
@@ -467,6 +487,7 @@ export default function App({
           scoutCalls={scout.calls}
           chatCalls={chat.calls}
           onKeyChange={scout.refreshKey}
+          qbMarketVsBookPct={marketGap.get('QB')}
           updates={updates}
           online={online}
         />
@@ -478,6 +499,7 @@ export default function App({
           state={draft.state}
           mode={sheet.mode}
           roomPrice={displayRoomPrice(sheet.player, market.inflation)}
+          marketVsBookPct={marketGap.get(sheet.player.position)}
           onCancel={() => setSheet(null)}
           onConfirm={(price) => {
             if (sheet.mode === 'bid') draft.markMine(sheet.player.id, price)

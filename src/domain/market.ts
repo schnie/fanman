@@ -1,4 +1,12 @@
-import { isUnpriced, observedPrice, type Pick, type Player, type Settings } from './types'
+import {
+  isUnpriced,
+  marketIsComparable,
+  observedPrice,
+  type Pick,
+  type Player,
+  type Scoring,
+  type Settings,
+} from './types'
 
 /**
  * Auction inflation: how much real money is chasing each dollar of listed
@@ -229,3 +237,51 @@ export function inflationIsMeaningful(inflation: number): boolean {
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n))
 }
+
+/**
+ * How the market column actually reads against the book, at one position, on
+ * the board we are holding — as a percentage. 23 means the market average is
+ * running at roughly a quarter of ESPN's book value for that position.
+ *
+ * This exists because the caveat needs a number and a constant would rot. The
+ * app runs once a year; a "market reads ~23% of book at QB" baked into the
+ * source in one August is a confident lie by the next, and nothing in the UI
+ * would say so. Measured off the loaded board it is simply always current, and
+ * it costs a median over a few dozen rows on a screen that opens by hand.
+ *
+ * Only meaningful where the two columns disagree by format — see
+ * `marketIsComparable`. Under a one-QB book this is the ordinary
+ * market-over-book premium, which `marketPremium` already says better, per
+ * player, so it returns undefined rather than inviting a second reading of the
+ * same thing.
+ *
+ * Undefined below `GAP_MIN_SAMPLE` priced players too. A median over three
+ * rows is a number with no claim on the board, and this one is printed as a
+ * fact about the format.
+ */
+export function marketVsBookPct(
+  players: Player[],
+  scoring: Scoring,
+  position: string,
+): number | undefined {
+  if (marketIsComparable(scoring)) return undefined
+
+  const ratios = players
+    .filter((p) => p.position === position && !isUnpriced(p) && p.espnValue > 0 && p.marketValue > 0)
+    .map((p) => p.marketValue / p.espnValue)
+    .sort((a, b) => a - b)
+
+  if (ratios.length < GAP_MIN_SAMPLE) return undefined
+
+  // Median, not mean: one $1 quarterback whose book value is $30 drags an
+  // average further than he tells us anything, and the deep end of every
+  // position is full of them.
+  const mid = Math.floor(ratios.length / 2)
+  const median =
+    ratios.length % 2 === 0 ? (ratios[mid - 1] + ratios[mid]) / 2 : ratios[mid]
+
+  return Math.round(median * 100)
+}
+
+/** Below this a median says more about the sample than about the board. */
+export const GAP_MIN_SAMPLE = 5
