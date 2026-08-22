@@ -197,16 +197,18 @@ export function ChatPane({
         and that label scrolls with the transcript while a standing note under
         the input is off screen for all but the last turn.
 
-        The call count stays for the same reason the scout's does — a control
-        that spends money says so where the button is, not in a settings
-        screen nobody opens mid-draft.
+        The bare count stays, for the same reason the scout's does: a control
+        that spends money keeps its meter where the button is, not in a
+        settings screen nobody opens mid-draft. It no longer spells out that
+        each one is billed — anyone who entered an API key knows, and a phone
+        is the wrong place to say it on every render.
       */}
       <p className="chat-note">
         {!online
           ? 'Offline — questions need the network.'
           : !hasKey
             ? 'Add a Claude API key in Settings to ask questions.'
-            : `${calls} question${calls === 1 ? '' : 's'} asked this draft, each a paid API call.`}
+            : `${calls} question${calls === 1 ? '' : 's'} asked this draft.`}
       </p>
     </div>
   )
