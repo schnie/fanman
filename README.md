@@ -132,22 +132,14 @@ cost that a player's price doesn't tell you. Position-scoped on purpose: a
 week full of missing receivers says nothing about the quarterback you're
 bidding on, because no receiver was ever going to cover that slot.
 
-On **My team**, a *Bye weeks* block above the lineup lists each week worst
-first, naming the starting slots that go empty — `Wk 5 · RB×2, OP uncovered` —
-or saying the bench covers it. Naming beats counting: it tells you which
-position to go shopping for.
+On **My team**, the gold chip on a roster row asks the same question per
+*player*: it marks someone only when the week is short at **their** position. A
+receiver with three bodies behind him is not a problem just because the back
+beside him is.
 
-The gold chip on a roster row asks the same question per *player*: it marks
-someone only when the week is short at **their** position. A receiver with
-three bodies behind him is not a problem just because the back beside him is,
-and the names under an alert list the players it's actually about, counting the
-rest as `+1 covered`.
-
-Only the weeks that cost a starting slot show by default; the covered ones fold
-away behind a `3 covered` toggle, and the block says *Every bye week is
-covered* when there's nothing to flag. A bye you can cover is not news, and six
-reassuring rows above a fifteen-row lineup push the problem week off a phone
-screen.
+There's no bye-week summary above the lineup — there was one, and the chips say
+the same thing in the place you're already looking. A block that repeats what
+the rows below it already show costs a phone screen the top of its lineup.
 
 Coverage is answered by re-running the lineup builder against the roster minus
 that week's byes (`src/domain/byes.ts`) rather than counting positions by hand.
@@ -347,7 +339,7 @@ Do this the night before, not in the parking lot:
 
 Working: board, search, position and FLEX filters, cross-off, win-with-bid,
 budget math, undo, positional roster with bench divider, bye weeks on both
-tabs with bench-coverage warnings, head coaches with FPI-derived values,
+tabs with position-scoped coverage flags, head coaches with FPI-derived values,
 settings, persistence, offline fallback, the scout, player profiles, and a
 GitHub Pages deploy.
 
