@@ -100,7 +100,8 @@ describe('useHeadHeight', () => {
     render(<LateMounting />)
     await screen.findByTestId('head')
 
-    // No throw, and no offset — the CSS fallback pins to the viewport top.
+    // No throw, and no offset — the sheet falls back to the pre-pinning
+    // behaviour rather than pinning the header somewhere it cannot be read.
     expect(published()).toBe('')
   })
 })

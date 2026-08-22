@@ -194,7 +194,7 @@ describe('the open row pins under the header', () => {
     // the CSS falls back silently — valid, green, and the open player's header
     // parks *under* the filter chips where you cannot read it.
     const hook = readFileSync('src/lib/useHeadHeight.ts', 'utf8')
-    const declared = hook.match(/const VAR = '(--[\w-]+)'/)?.[1]
+    const declared = hook.match(/HEAD_HEIGHT_VAR = '(--[\w-]+)'/)?.[1]
 
     expect(declared).toBeTruthy()
     expect(pinned.get('position')).toBe('sticky')

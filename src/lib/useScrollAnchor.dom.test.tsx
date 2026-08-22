@@ -25,6 +25,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  // Published by useHeadHeight in the app; set by one case below.
+  document.documentElement.style.removeProperty('--head-h')
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   scrollBy.mockReset()
@@ -108,6 +110,75 @@ describe('useScrollAnchor', () => {
 
     const user = userEvent.setup()
     render(<Jitter />)
+    await user.click(screen.getByRole('button', { name: 'toggle' }))
+
+    expect(scrollBy).not.toHaveBeenCalled()
+  })
+
+  it('brings a row closed from its pinned header back to the pin line', async () => {
+    // The open row's header sticks under the header stack, so it is tappable
+    // from anywhere in a card several screens tall — and there the row's <li>
+    // is far above the viewport. Holding *that* still holds nothing anyone can
+    // see: the row ends up hundreds of pixels off the top and the screen fills
+    // with whatever had been below the card. It should come back to the line
+    // it was pinned on, which is where it was being read.
+    function Pinned() {
+      const [openId, setOpenId] = useState<number | null>(55)
+      const anchorRow = useScrollAnchor(openId)
+      // Scrolled deep into a tall open card: the row's top is 700px above the
+      // viewport, and collapsing it takes height from *below* that point, so
+      // the top itself does not move at all.
+      TOP['55'] = -700
+      return (
+        <>
+          <li data-row-anchor={55} />
+          <button
+            onClick={() => {
+              anchorRow(55)
+              setOpenId((cur) => (cur === 55 ? null : 55))
+            }}
+          >
+            toggle
+          </button>
+        </>
+      )
+    }
+
+    document.documentElement.style.setProperty('--head-h', '130px')
+    const user = userEvent.setup()
+    render(<Pinned />)
+    await user.click(screen.getByRole('button', { name: 'toggle' }))
+
+    // -700 is where the row is; 130 is where it was being read. Scroll the
+    // difference so it lands back under the header stack.
+    expect(scrollBy).toHaveBeenCalledWith(0, -830)
+  })
+
+  it('anchors on the row itself when nothing is pinned', async () => {
+    // No published header height means no pin — before the first measurement,
+    // or wherever there is no ResizeObserver to take one — and the clamp has
+    // to be inert there rather than dragging rows to an offset of zero.
+    function Unpinned() {
+      const [openId, setOpenId] = useState<number | null>(55)
+      const anchorRow = useScrollAnchor(openId)
+      TOP['55'] = -700
+      return (
+        <>
+          <li data-row-anchor={55} />
+          <button
+            onClick={() => {
+              anchorRow(55)
+              setOpenId((cur) => (cur === 55 ? null : 55))
+            }}
+          >
+            toggle
+          </button>
+        </>
+      )
+    }
+
+    const user = userEvent.setup()
+    render(<Unpinned />)
     await user.click(screen.getByRole('button', { name: 'toggle' }))
 
     expect(scrollBy).not.toHaveBeenCalled()

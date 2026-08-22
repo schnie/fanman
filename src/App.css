@@ -465,9 +465,10 @@
    scroll state and no JS: it latches only once the card's top would have gone
    past, and lets go by itself as the card's bottom arrives — so it can never
    outlive the content it labels. `--head-h` is the measured height of the
-   stack above it (see useHeadHeight); the fallback pins to the top of the
-   viewport rather than not pinning at all, wherever that measurement is
-   unavailable. */
+   stack above it (see useHeadHeight). The `0px` fallback is not a working pin
+   — the header stack is opaque and sits at z-index 20, so a header pinned at
+   the very top parks behind it — it is the pre-pinning behaviour, which is the
+   right thing to fall back to where the height cannot be measured at all. */
 .row.expanded > .row-main {
   position: sticky;
   top: var(--head-h, 0px);

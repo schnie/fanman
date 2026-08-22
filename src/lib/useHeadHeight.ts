@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react'
 
-/** The custom property the height is published under. */
-const VAR = '--head-h'
+/**
+ * The custom property the height is published under. Exported because it is
+ * also the line the open row's header pins on, and `useScrollAnchor` has to
+ * hold rows still *at* that line — a second copy of the string would be a
+ * silent way for the two to disagree.
+ */
+export const HEAD_HEIGHT_VAR = '--head-h'
 
 /**
  * Publishes the sticky header's height as a CSS custom property on the root
@@ -38,19 +43,20 @@ export function useHeadHeight<T extends HTMLElement>() {
     if (!node) {
       // The header is gone; so is any offset that referred to it. Leaving the
       // last measurement behind would pin the next open row against a gap.
-      document.documentElement.style.removeProperty(VAR)
+      document.documentElement.style.removeProperty(HEAD_HEIGHT_VAR)
       return
     }
 
-    // jsdom has no ResizeObserver. Degrade to the CSS fallback, which pins the
-    // row at the top of the viewport rather than throwing.
+    // jsdom has no ResizeObserver. Degrade to the CSS fallback, which is the
+    // behaviour from before this existed — the open row's header parks behind
+    // the header stack, i.e. no visible pin — rather than throwing.
     if (typeof ResizeObserver === 'undefined') return
 
     const publish = () => {
       // Rounded up: half a pixel short leaves a sliver of the row below
       // showing through between the two pinned elements.
       const h = Math.ceil(node.getBoundingClientRect().height)
-      document.documentElement.style.setProperty(VAR, `${h}px`)
+      document.documentElement.style.setProperty(HEAD_HEIGHT_VAR, `${h}px`)
     }
 
     publish()
@@ -64,7 +70,7 @@ export function useHeadHeight<T extends HTMLElement>() {
   useEffect(
     () => () => {
       observer.current?.disconnect()
-      document.documentElement.style.removeProperty(VAR)
+      document.documentElement.style.removeProperty(HEAD_HEIGHT_VAR)
     },
     [],
   )
