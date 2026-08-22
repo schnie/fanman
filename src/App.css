@@ -810,6 +810,19 @@
    without moving anything. */
 .row-detail {
   animation: detail-in 150ms ease-out;
+  /* The card's own top margin. `.row-main`'s 12px bottom padding was measured
+     for a collapsed row sitting in a list, where the next thing below it is
+     another row; on an open card it is the gap between a header and the first
+     line of the thing it heads. Once that header pins, the card opens with the
+     bio jammed against a hairline directly under the sticky stack — two rules
+     and a line of text inside 12px, at the top of the screen.
+
+     Spacing the *content* down, rather than pinning the row header lower with
+     `calc(var(--head-h) + …)`: the pin line is the underside of an opaque
+     stack, and any offset there is a window onto the rows still scrolling
+     behind it — the same sliver `useHeadHeight` rounds its measurement up to
+     avoid. The gap belongs inside the card, where nothing passes through it. */
+  padding-top: 8px;
 }
 
 @keyframes detail-in {
