@@ -34,8 +34,16 @@ export function SettingsPane({
   onKeyChange,
   updates,
   online,
+  qbMarketVsBookPct,
 }: {
   settings: Settings
+  /**
+   * How the market column reads against the book at QB on the loaded board —
+   * see `marketVsBookPct`. QB because this pane has no player in front of it
+   * and QB is where the format gap is worth a sentence. Undefined leaves the
+   * note qualitative rather than printing a number we did not measure.
+   */
+  qbMarketVsBookPct?: number
   fetchedAt: number | null
   onChange: (patch: Partial<Settings>) => void
   onRefresh: () => void
@@ -111,8 +119,11 @@ export function SettingsPane({
         <div className="field-note">
           Superflex is this league's format — the OP slot takes a QB. ESPN's ranks
           and values follow it. The <em>market</em> column doesn't: ESPN publishes
-          a single average across all leagues, nearly all one-QB, so it reads low
-          on quarterbacks. There is no superflex version of it to fetch.
+          a single average across all leagues, nearly all one-QB, and there is no
+          superflex version of it to fetch.{' '}
+          {qbMarketVsBookPct === undefined
+            ? 'So it reads low on quarterbacks.'
+            : `On the board you have loaded it reads ${qbMarketVsBookPct}% of book at QB.`}
         </div>
       )}
 

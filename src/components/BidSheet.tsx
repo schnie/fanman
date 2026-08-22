@@ -14,11 +14,26 @@ export const BID_PROMPT = 'Enter the winning bid'
  * a fat-fingered $80 should be visible as a mistake, not discovered three picks
  * later.
  */
-export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, onCancel }: {
+export function BidSheet({
+  player,
+  state,
+  roomPrice,
+  marketVsBookPct,
+  mode = 'bid',
+  onConfirm,
+  onCancel,
+}: {
   player: Player
   state: DraftState
   /** What this player is likely to actually cost, after inflation. */
   roomPrice?: number
+  /**
+   * How the market column reads against the book at *this player's* position,
+   * measured off the loaded board — see `marketVsBookPct`. Undefined when the
+   * two columns are quoted in the same format, or when the position is too
+   * thin to take a median of, and the caveat then falls back to prose.
+   */
+  marketVsBookPct?: number
   /** `sold` records someone else's winning bid; it is not our money. */
   mode?: 'bid' | 'sold'
   onConfirm: (price: number) => void
@@ -59,9 +74,17 @@ export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, on
               where the number turns into a bid, and a phone has no hover. */}
           {!marketMatchesFormat && (
             <div className="sheet-caveat">
-              * ESPN publishes one market average across all leagues, nearly all
-              one-QB. The ESPN figure is superflex; the market one isn't, so it
-              runs low here — hardest at QB.
+              * ESPN's market average covers all its leagues, nearly all one-QB,
+              and has no superflex version.{' '}
+              {marketVsBookPct === undefined ? (
+                <>The ESPN figure follows this league's format; the market one
+                cannot, so the two disagree — hardest at QB.</>
+              ) : (
+                <>
+                  On this board it reads{' '}
+                  <strong>{marketVsBookPct}% of book at {player.position}</strong>.
+                </>
+              )}
             </div>
           )}
         </div>

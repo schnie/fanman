@@ -732,6 +732,48 @@ describe('draft board end to end', () => {
     await waitFor(() => expect(adapter.draft?.settings.scoring).toBe('SUPERFLEX'))
   })
 
+  // The caveat carries a measured number rather than a constant: this app runs
+  // once a year, and a percentage baked into the source in one August is a
+  // confident lie by the next with nothing in the UI to say so.
+  it('measures the market-vs-book gap off the board it is holding', async () => {
+    // Six quarterbacks whose market average sits at a quarter of book — the
+    // real 2026 board reads about 23%.
+    class DeepBoard extends FakeAdapter {
+      override fetchRankings = async () => [
+        ...ROSTER,
+        ...Array.from({ length: 6 }, (_, i) =>
+          makePlayer({
+            id: 200 + i,
+            name: `QB${i}`,
+            position: 'QB',
+            rank: 20 + i,
+            espnValue: 40,
+            marketValue: 10,
+          }),
+        ),
+      ]
+    }
+    const user = userEvent.setup()
+    render(<App adapter={new DeepBoard()} />)
+
+    await openRow(user, 'QB0')
+    await user.click(screen.getByRole('button', { name: 'We got them' }))
+    expect(screen.getByText(/25% of book at QB/)).toBeInTheDocument()
+  })
+
+  // A median over three rows says more about the sample than about the board,
+  // and this one is printed as a fact about the format.
+  it('falls back to prose when the position is too thin to measure', async () => {
+    // The default board carries exactly one quarterback.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+
+    await openRow(user, 'Josh Allen')
+    await user.click(screen.getByRole('button', { name: 'We got them' }))
+    expect(screen.queryByText(/% of book/)).not.toBeInTheDocument()
+    expect(screen.getByText(/hardest at QB/)).toBeInTheDocument()
+  })
+
   it('asks for the bid the same way whichever button opened the sheet', async () => {
     // The two modes drifted apart once already — 'Gone' asked "What did they
     // sell for?" while 'We got them' said "Enter the winning bid". Same number,
