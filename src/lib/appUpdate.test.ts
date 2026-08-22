@@ -121,9 +121,15 @@ describe('checking for a new build', () => {
   })
 
   it('carries the build stamp through for Settings to show', () => {
-    expect(createAppUpdates(from(undefined), 'abc1234 · 2026-08-22 10:00Z').version).toBe(
-      'abc1234 · 2026-08-22 10:00Z',
-    )
+    const updates = createAppUpdates(from(undefined), 'abc1234', '2026-08-22T10:00:00.000Z')
+
+    expect(updates.version).toBe('abc1234')
+    /*
+     * Untouched, deliberately: the instant crosses the seam raw so the device
+     * can render it in its own timezone. Formatting here would bake in the
+     * build machine's clock, which is the UTC stamp this replaced.
+     */
+    expect(updates.builtAt).toBe('2026-08-22T10:00:00.000Z')
   })
 })
 

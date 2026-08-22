@@ -29,6 +29,13 @@ export type UpdateCheck = 'updating' | 'current' | 'failed' | 'unsupported'
 export interface AppUpdates {
   /** Which build this device is running. Settings shows it verbatim. */
   version: string
+  /**
+   * When that build was made, as an ISO instant — the raw moment, not a
+   * rendering of it. Settings turns it into the reader's own local time, the
+   * same way `NextMove` owns its wording: the seam carries the fact, the
+   * component decides how it reads.
+   */
+  builtAt: string
   /** Ask the server whether a newer build exists. */
   check(): Promise<UpdateCheck>
   /** Throw away the cached app and download it again. Keeps the draft. */
@@ -68,6 +75,7 @@ const REGISTER_TIMEOUT_MS = 10_000
 export function createAppUpdates(
   registrar: Registrar = registerViaPlugin,
   version: string = __APP_BUILD__,
+  builtAt: string = __APP_BUILT_AT__,
 ): AppUpdates {
   /*
    * Guarded here rather than inside the default registrar so the guarantee
@@ -137,7 +145,7 @@ export function createAppUpdates(
   // Never cleared: this lives as long as the app does, and there is no unmount.
   window.setInterval(checkOnWake, POLL_MS)
 
-  return { version, check, reinstall }
+  return { version, builtAt, check, reinstall }
 }
 
 /**

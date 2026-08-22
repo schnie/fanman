@@ -9,6 +9,7 @@ import { DEFAULT_SETTINGS } from './domain/types'
 import type { DraftState, Player, PlayerProfile, ScoutReport } from './domain/types'
 import { ScoutError } from './data/scoutError'
 import type { AppUpdates } from './lib/appUpdate'
+import { formatBuildTime } from './lib/format'
 import { makePlayer, makeProfile, makeReport } from './test/factories'
 
 const player = (id: number, name: string, rank: number, position = 'RB'): Player =>
@@ -1476,7 +1477,8 @@ describe('the settings number fields', () => {
  */
 describe('the app version section', () => {
   const fakeUpdates = (overrides: Partial<AppUpdates> = {}): AppUpdates => ({
-    version: 'abc1234 · 2026-08-22 10:00Z',
+    version: 'abc1234',
+    builtAt: '2026-08-22T14:00:00.000Z',
     check: async () => 'current',
     reinstall: async () => {},
     ...overrides,
@@ -1492,7 +1494,39 @@ describe('the app version section', () => {
   it('names the build the device is running', async () => {
     await openSettings(fakeUpdates())
 
-    expect(screen.getByText('abc1234 · 2026-08-22 10:00Z')).toBeInTheDocument()
+    expect(screen.getByText('abc1234')).toBeInTheDocument()
+  })
+
+  /*
+   * The stamp reaches the app as a UTC instant and has to leave it as the
+   * phone's own clock — nobody mid-draft converts a Z-suffixed time in their
+   * head to decide whether they are on the build that just shipped. Asserted
+   * against `formatBuildTime` rather than a literal so the test doesn't depend
+   * on the zone the suite happens to run in; `format.test.ts` pins a zone and
+   * checks the shift itself.
+   */
+  it('shows when that build was made, in the time the reader keeps', async () => {
+    await openSettings(fakeUpdates())
+
+    /*
+     * `toHaveTextContent` collapses whitespace on the DOM side only, so the
+     * expected string has to be collapsed by hand: ICU 72–77 (Node 20) puts a
+     * narrow no-break space before AM/PM, which the DOM side would flatten to a
+     * plain space and this side would keep — a mismatch on Node versions this
+     * machine doesn't happen to run.
+     */
+    const built = formatBuildTime('2026-08-22T14:00:00.000Z')!.replace(/\s+/g, ' ')
+    expect(screen.getByText('abc1234').parentElement).toHaveTextContent(
+      `Running build abc1234, built ${built}.`,
+    )
+  })
+
+  it('says only the build number when there is no usable timestamp', async () => {
+    await openSettings(fakeUpdates({ builtAt: '' }))
+
+    expect(screen.getByText('abc1234').parentElement).toHaveTextContent(
+      'Running build abc1234.',
+    )
   })
 
   it('says so plainly when there is nothing newer', async () => {

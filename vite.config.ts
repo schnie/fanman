@@ -15,17 +15,23 @@ const BASE = process.env.VITE_BASE ?? '/fanman/'
  * installed home-screen app gives you no other way to tell, which is what made
  * "is it even updating?" impossible to answer from the couch.
  *
- * The timestamp also guarantees that every deploy produces different bytes, so
- * the service worker always has something to notice even for a change that
- * happens to leave the chunk hashes alone.
+ * The instant is stamped raw, as an ISO string, rather than pre-formatted:
+ * whoever reads it is holding a phone set to their own clock, and a build time
+ * they have to convert out of UTC in their head is a build time they will not
+ * check. Formatting is `lib/format.ts`'s job, at render time, on the device.
+ *
+ * It also guarantees that every deploy produces different bytes, so the service
+ * worker always has something to notice even for a change that happens to leave
+ * the chunk hashes alone.
  */
-const BUILD = `${(process.env.GITHUB_SHA ?? 'local').slice(0, 7)} · ${new Date()
-  .toISOString()
-  .slice(0, 16)
-  .replace('T', ' ')}Z`
+const BUILD = (process.env.GITHUB_SHA ?? 'local').slice(0, 7)
+const BUILT_AT = new Date().toISOString()
 
 export default defineConfig(({ command }) => ({
-  define: { __APP_BUILD__: JSON.stringify(BUILD) },
+  define: {
+    __APP_BUILD__: JSON.stringify(BUILD),
+    __APP_BUILT_AT__: JSON.stringify(BUILT_AT),
+  },
   // Dev stays at the root so the published-port URL is just localhost:5173.
   base: command === 'build' ? BASE : '/',
   plugins: [
