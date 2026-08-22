@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import {
   isUnpriced,
+  marketIsComparable,
   marketPremium,
   marketTrend,
   observedPrice,
@@ -247,9 +248,30 @@ function PlayerValue({ player, room, scoring }: { player: Player; room?: number;
   if (!isUnpriced(player)) {
     const premium = marketPremium(player, scoring)
     const trend = marketTrend(player)
+    // The room price is rendered beside the number it was computed from, which
+    // is the book wherever the market column is quoted in another format — see
+    // `priceAnchor`. It used to sit inside `.val-market` unconditionally, so a
+    // superflex row read `$11 room $55` against a header saying ×1.20 and
+    // invited exactly one conclusion: that the app cannot multiply. Adjacency
+    // is the only provenance a phone gets; there is no hover to explain it.
+    const roomFromBook = !marketIsComparable(scoring)
+    const roomChip =
+      room === undefined ? null : (
+        <span
+          className="val-room"
+          title={`Likely price in this room: ESPN's ${
+            roomFromBook ? 'superflex book value' : 'market average'
+          }, after inflation`}
+        >
+          room ${room}
+        </span>
+      )
     return (
       <>
-        <span className="val-espn">${player.espnValue}</span>
+        <span className="val-espn">
+          ${player.espnValue}
+          {roomFromBook && roomChip}
+        </span>
         {/* The row is 230 of these, so the caveat rides as a title rather than
             as visible text — the bid sheet is where it is spelled out, because
             that is the screen where the number becomes a bid and the one a
@@ -278,11 +300,7 @@ function PlayerValue({ player, room, scoring }: { player: Player; room?: number;
               {premium > 0 ? '+' : ''}{premium}
             </span>
           )}
-          {room !== undefined && (
-            <span className="val-room" title="Likely price in this room, after inflation">
-              room ${room}
-            </span>
-          )}
+          {!roomFromBook && roomChip}
         </span>
       </>
     )

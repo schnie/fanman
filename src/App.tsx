@@ -19,7 +19,7 @@ import { useStuck } from './lib/useStuck'
 import { useHeadHeight } from './lib/useHeadHeight'
 import { useScrollAnchor } from './lib/useScrollAnchor'
 import { useOnline } from './lib/useOnline'
-import { OP_POSITIONS } from './domain/lineup'
+import { bookMismatch, OP_POSITIONS } from './domain/lineup'
 import { byeCounts } from './domain/byes'
 import { wonPicksFrom } from './domain/budget'
 import { displayRoomPrice, marketVsBookPct, summarizeMarket } from './domain/market'
@@ -371,6 +371,21 @@ export default function App({
           changes off-tab. The rows themselves are memoised and re-render only
           when their own props move. */}
       <div className="board-panel" hidden={tab !== 'board'}>
+        {/* Above the staleness warning, because it outranks it: a board from
+            the wrong rank book is not old data, it is the wrong data, and it
+            looks entirely healthy. Not dismissible — this league's lineup
+            starts two quarterbacks, so there is no reading of this state that
+            is correct, and the button ends it in one tap. */}
+        {bookMismatch(draft.state.settings) && (
+          <div className="banner warn">
+            This board is {draft.state.settings.scoring}, but your lineup starts two
+            quarterbacks. ESPN's superflex values are the ones that apply here —
+            on this board QBs are priced far below what they are worth.
+            <button onClick={() => draft.updateSettings({ scoring: 'SUPERFLEX' })}>
+              Use superflex
+            </button>
+          </div>
+        )}
         {error && (
           <div className="banner warn">
             {error}. Showing {fetchedAt ? `cached data from ${describeAge(fetchedAt)}` : 'no data'}.

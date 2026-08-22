@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildLineup, STARTER_SLOTS } from './lineup'
-import type { Pick, Player } from './types'
+import { bookMismatch, buildLineup, lineupIsSuperflex, STARTER_SLOTS } from './lineup'
+import { DEFAULT_SETTINGS, type Pick, type Player, type Settings } from './types'
 
 let nextId = 1
 const roster: Player[] = []
@@ -186,5 +186,54 @@ describe('buildLineup', () => {
     // Unplaceable, but not lost — it lands on the bench rather than vanishing.
     expect(lineup.starters.every((s) => !s.pick)).toBe(true)
     expect(lineup.bench[0].pick).toEqual(ghost)
+  })
+})
+
+describe('lineupIsSuperflex', () => {
+  it('is true for the lineup this league actually starts', () => {
+    expect(lineupIsSuperflex(DEFAULT_SETTINGS.slots)).toBe(true)
+  })
+
+  // Read off `accepts`, not off the `OP` label, so renaming the slot cannot
+  // silently turn the check off.
+  it('reads the slot that takes a QB, not the one called OP', () => {
+    const op = STARTER_SLOTS.find((s) => s.id === 'OP')
+    expect(op?.accepts).toContain('QB')
+  })
+
+  // A short roster truncates STARTER_SLOTS. Below seven starters the OP slot
+  // is not in the lineup, and the league genuinely is a one-QB one.
+  it('turns off when the roster is too short to reach the OP slot', () => {
+    const op = STARTER_SLOTS.findIndex((s) => s.id === 'OP')
+    expect(lineupIsSuperflex(op)).toBe(false)
+    expect(lineupIsSuperflex(op + 1)).toBe(true)
+  })
+
+  it('survives a nonsense roster size', () => {
+    expect(lineupIsSuperflex(0)).toBe(false)
+    expect(lineupIsSuperflex(-3)).toBe(false)
+  })
+})
+
+describe('bookMismatch', () => {
+  const at = (over: Partial<Settings>): Settings => ({ ...DEFAULT_SETTINGS, ...over })
+
+  // Reachable by design: `migrateSettings` refuses to switch books mid-draft
+  // rather than dropping the cached board on venue wifi. The cost is a draft
+  // running on one-QB values while everything else looks healthy.
+  it('flags a one-QB book under a lineup that starts two', () => {
+    expect(bookMismatch(at({ scoring: 'PPR' }))).toBe(true)
+    expect(bookMismatch(at({ scoring: 'STANDARD' }))).toBe(true)
+  })
+
+  it('says nothing when the book already matches', () => {
+    expect(bookMismatch(at({ scoring: 'SUPERFLEX' }))).toBe(false)
+  })
+
+  // PPR is the right book for a lineup with no second QB slot, so the warning
+  // must not fire on a roster too short to have one.
+  it('says nothing when the lineup is not superflex either', () => {
+    const op = STARTER_SLOTS.findIndex((s) => s.id === 'OP')
+    expect(bookMismatch(at({ scoring: 'PPR', slots: op }))).toBe(false)
   })
 })

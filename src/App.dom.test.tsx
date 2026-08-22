@@ -2137,3 +2137,75 @@ describe('ask', () => {
     expect(screen.getByText(/Ask about your roster/)).toBeInTheDocument()
   })
 })
+
+describe('the book the board was priced from', () => {
+  /** A board with enough spread that a room price differs from the listed one. */
+  class PricedBoard extends FakeAdapter {
+    override fetchRankings = async () =>
+      ROSTER.map((p) => makePlayer({ ...p, espnValue: 46, marketValue: 11 }))
+  }
+
+  // Reachable by design: migrateSettings refuses to switch books mid-draft
+  // rather than dropping the cached board on venue wifi. The symptom is
+  // quarterbacks priced at a fraction of their worth, which reads as an ESPN
+  // problem rather than as a setting, so the app has to say it out loud.
+  it('says so on the board when the book cannot match the lineup', async () => {
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+      log: [{ playerId: 2, status: 'gone', price: 30, at: 1 }],
+    }
+    render(<App adapter={adapter} />)
+
+    expect(await screen.findByText(/lineup starts two\s+quarterbacks/)).toBeInTheDocument()
+  })
+
+  it('switches the book from the banner in one tap', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+      log: [{ playerId: 2, status: 'gone', price: 30, at: 1 }],
+    }
+    render(<App adapter={adapter} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Use superflex' }))
+
+    await waitFor(() => expect(adapter.draft?.settings.scoring).toBe('SUPERFLEX'))
+    expect(screen.queryByRole('button', { name: 'Use superflex' })).not.toBeInTheDocument()
+  })
+
+  it('stays quiet when the board is already on the right book', async () => {
+    render(<App adapter={new FakeAdapter()} />)
+
+    await findRow('Josh Allen')
+    expect(screen.queryByRole('button', { name: 'Use superflex' })).not.toBeInTheDocument()
+  })
+
+  // Adjacency is the only provenance a phone gets. Nested under the market
+  // figure, a superflex row read `$11 room $55` against a header saying ×1.20
+  // and invited exactly one conclusion: that the app cannot multiply.
+  it('puts the room price beside the number it was computed from', async () => {
+    const { container } = render(<App adapter={new PricedBoard()} />)
+    await findRow('Josh Allen')
+
+    await waitFor(() => expect(container.querySelector('.val-room')).not.toBeNull())
+    // Superflex prices off the book, so the chip rides with the book.
+    expect(container.querySelector('.val-espn .val-room')).not.toBeNull()
+    expect(container.querySelector('.val-market .val-room')).toBeNull()
+  })
+
+  it('leaves the chip with the market figure under a one-QB book', async () => {
+    const adapter = new PricedBoard()
+    adapter.draft = {
+      settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+      log: [{ playerId: 2, status: 'gone', price: 30, at: 1 }],
+    }
+    const { container } = render(<App adapter={adapter} />)
+    await findRow('Josh Allen')
+
+    await waitFor(() => expect(container.querySelector('.val-room')).not.toBeNull())
+    expect(container.querySelector('.val-market .val-room')).not.toBeNull()
+    expect(container.querySelector('.val-espn .val-room')).toBeNull()
+  })
+})

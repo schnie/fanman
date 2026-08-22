@@ -142,6 +142,15 @@ column with a caveat under it, so it has to be quoted in the format being
 drafted. On the live board that moves Hurts from $14 to $55 and Josh Allen from
 $39 to $70, while pulling the running backs slightly down (Gibbs $81 → $68).
 
+The `room $N` chip sits beside whichever number it was computed from — the book
+under superflex, the market average otherwise — because on a phone adjacency is
+the only provenance there is.
+
+If the board is ever loaded from a book that cannot match the lineup, the board
+says so and offers a one-tap switch. That state is reachable on purpose: the
+book is never changed out from under a draft already in progress, since doing so
+drops the cached board and draft-day wifi is not worth betting it on.
+
 Because the two are quoted in different formats, the book-versus-market gap
 **is not computed under superflex**. Under a one-QB book that gap is the useful
 signal, showing where the market is paying over or under book; under superflex
