@@ -605,7 +605,7 @@ describe('draft board end to end', () => {
     expect(calls).toBe(0)
   })
 
-  it('clears the search from the inset button and keeps focus', async () => {
+  it('clears the search from the inset button and drops the keyboard', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
     await findRow('Jahmyr Gibbs')
@@ -618,8 +618,9 @@ describe('draft board end to end', () => {
 
     expect(search).toHaveValue('')
     expect(await findRow('Jahmyr Gibbs')).toBeInTheDocument()
-    // Clearing is nearly always a prelude to typing the next name.
-    expect(search).toHaveFocus()
+    // The ✕ is the way out of a search, and on a phone a focused input means
+    // a keyboard over the board you just cleared to see.
+    expect(search).not.toHaveFocus()
   })
 
   it('shows the clear button only when there is something to clear', async () => {

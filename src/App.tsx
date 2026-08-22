@@ -326,9 +326,13 @@ export default function App({
                   aria-label="Clear search"
                   onClick={() => {
                     setQuery('')
-                    // Keep the keyboard up: clearing is almost always a prelude
-                    // to typing the next name, not to dismissing the field.
-                    searchInput.current?.focus()
+                    // Drop the keyboard. Tapping the ✕ is how you get *out* of
+                    // a search — you've found the row, or the name went to
+                    // someone else — and on a phone the keyboard is covering
+                    // the half of the board you just cleared it to see. Typing
+                    // the next name is one tap on the field away; getting the
+                    // board back from a focused input was not.
+                    searchInput.current?.blur()
                   }}
                 >
                   ✕
