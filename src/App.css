@@ -903,6 +903,16 @@
   margin-top: 3px;
 }
 
+/* The footnote for the asterisk in .sheet-sub. Quieter than the line it
+   explains — it qualifies a number, it isn't one. */
+.sheet-caveat {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+  opacity: 0.85;
+  margin-top: 6px;
+}
+
 .sheet-price {
   text-align: center;
   padding: 14px 0 6px;

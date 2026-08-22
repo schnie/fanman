@@ -692,6 +692,46 @@ describe('draft board end to end', () => {
     expect(adapter.draft?.log.at(-1)).toMatchObject({ playerId: 1, status: 'gone', price: 85 })
   })
 
+  // ESPN's book value follows whichever rank book we asked for; its market
+  // average never does — there is one, across all leagues, nearly all one-QB.
+  // On the bid sheet the two sit side by side and the reader is about to turn
+  // one of them into a bid, so the mismatch is spelled out there rather than
+  // left to a tooltip a phone cannot reach.
+  it('says on the bid sheet that the market figure is not a superflex price', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+
+    await openRow(user, 'Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'We got them' }))
+    expect(screen.getByText(/not a superflex price|market average|one-QB/i)).toBeInTheDocument()
+  })
+
+  it('drops the caveat when the board really is a one-QB board', async () => {
+    // Seeded mid-draft, because that is the only way a one-QB book survives
+    // the load — `migrateSettings` corrects a draft that has not started.
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+      log: [{ playerId: 4, status: 'gone', price: 30, at: 1 }],
+    }
+    render(<App adapter={adapter} />)
+
+    await openRow(user, 'Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'We got them' }))
+    expect(screen.queryByText(/one-QB/i)).not.toBeInTheDocument()
+  })
+
+  it('corrects a stored one-QB book to superflex before the draft opens', async () => {
+    // The default only reaches a device with nothing stored; every phone that
+    // opened the app last season has the old book written into its draft.
+    const adapter = new FakeAdapter()
+    adapter.draft = { settings: { ...DEFAULT_SETTINGS, scoring: 'STANDARD' }, log: [] }
+    render(<App adapter={adapter} />)
+
+    await waitFor(() => expect(adapter.draft?.settings.scoring).toBe('SUPERFLEX'))
+  })
+
   it('asks for the bid the same way whichever button opened the sheet', async () => {
     // The two modes drifted apart once already — 'Gone' asked "What did they
     // sell for?" while 'We got them' said "Enter the winning bid". Same number,

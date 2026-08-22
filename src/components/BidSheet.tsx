@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { canBid, previewBid } from '../domain/budget'
-import type { DraftState, Player } from '../domain/types'
+import { marketIsComparable, type DraftState, type Player } from '../domain/types'
 
 /**
  * The empty-keypad prompt, shared by both modes. Whose money it is changes what
@@ -24,6 +24,11 @@ export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, on
   onConfirm: (price: number) => void
   onCancel: () => void
 }) {
+  // ESPN's market average has no superflex variant — see `marketIsComparable`.
+  // The book value beside it does follow the format, so on this screen the two
+  // numbers disagree hardest exactly where the money is: quarterbacks.
+  const marketMatchesFormat = marketIsComparable(state.settings.scoring)
+
   const [raw, setRaw] = useState('')
   const price = raw === '' ? 0 : parseInt(raw, 10)
   const sold = mode === 'sold'
@@ -45,10 +50,20 @@ export function BidSheet({ player, state, roomPrice, mode = 'bid', onConfirm, on
           <div className="sheet-player">{player.name}</div>
           <div className="sheet-sub">
             {player.position} · ESPN ${player.espnValue} · market ${player.marketValue}
+            {!marketMatchesFormat && '*'}
             {roomPrice !== undefined && roomPrice !== Math.round(player.marketValue) && (
               <> · <strong>this room ~${roomPrice}</strong></>
             )}
           </div>
+          {/* Spelled out rather than left to a tooltip: this is the screen
+              where the number turns into a bid, and a phone has no hover. */}
+          {!marketMatchesFormat && (
+            <div className="sheet-caveat">
+              * ESPN publishes one market average across all leagues, nearly all
+              one-QB. The ESPN figure is superflex; the market one isn't, so it
+              runs low here — hardest at QB.
+            </div>
+          )}
         </div>
 
         <div className="sheet-price">

@@ -220,6 +220,33 @@ failure part-way through an answer — with no network. It rejects with
 `scoutError.ts` already describes those kinds as part of the seam rather than
 as something private to the scout.
 
+**The rank book is superflex, and the market column isn't.** ESPN publishes
+`STANDARD`, `PPR`, `ELIMINATION` and `SUPERFLEX` on the same payload;
+`Scoring` selects one and it reaches both `sortDraftRanks` and
+`draftRanksByRankType`. This league starts two QBs (`STARTER_SLOTS`, the OP
+slot), so the default is `SUPERFLEX` — under PPR the app under-priced Josh
+Allen at $22/rank 36 against $59/rank 1, for a season. `marketValue` is the
+exception: it comes from `ownership.auctionValueAverage`, one global average
+across nearly all one-QB leagues, with no superflex variant published. So
+`espnValue` follows the format and `marketValue` never does.
+
+That makes `marketPremium` — the subtraction of one from the other — undefined
+under superflex rather than zero, because zero is a real reading ("priced at
+book") and the sorts that consume it must tell "no premium" from "no signal".
+Left in, it would have flagged every quarterback as the board's biggest bargain
+on the strength of a format mismatch. Where the signal is gone, `drainPick`
+degrades to the priciest body (still the most money moved) and `buyPick` sorts
+*up* on price — reusing the descending tiebreak would have handed back the tier
+leader, the one player that function exists to skip. The market figure is still
+shown, with the caveat visible on the bid sheet rather than in a tooltip a
+phone cannot reach.
+
+`DEFAULT_SETTINGS` only reaches a device with nothing stored, so
+`migrateSettings` corrects a saved draft on load — but **only before the draft
+opens**. Switching the book invalidates the rankings cache (it is keyed on
+scoring), so the next paint has nothing until a refetch lands, and betting the
+board on venue wifi mid-auction is the thing this app is built not to do.
+
 **Profiles are free, so they get the opposite policy.** `useProfile` fetches on
 row open only, caches for six hours, and evicts at 150 entries. It's a latency
 cache, not something we must not lose. Don't unify it with the scout's caching.

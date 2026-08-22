@@ -63,7 +63,7 @@ describe('buildReference', () => {
    * prompt at all.
    */
   it('tells the model which scoring format it is looking at', () => {
-    for (const scoring of ['PPR', 'STANDARD'] as const) {
+    for (const scoring of ['PPR', 'STANDARD', 'SUPERFLEX'] as const) {
       const ref = buildReference(build([], { ...DEFAULT_SETTINGS, scoring }))
       expect(ref).toContain(`Scoring: ${scoring}`)
     }
@@ -72,7 +72,25 @@ describe('buildReference', () => {
   it('spells out that OP makes this superflex, since the label does not', () => {
     const ref = buildReference(build())
     expect(ref).toMatch(/SUPERFLEX/)
+    expect(ref).toContain('Two quarterbacks can start')
+  })
+
+  // The board hands the model two money columns drawn from different books,
+  // and it reads them side by side on every row. Unsaid, the gap at QB reads
+  // as the room being cool on quarterbacks — the one thing it is not evidence
+  // of, since the market figure never saw a superflex league.
+  it('warns that only the espn column follows the superflex book', () => {
+    const ref = buildReference(build())
+    expect(ref).toContain('SUPERFLEX book')
+    expect(ref).toContain('difference of format, not a bargain')
+  })
+
+  // The old warning is still the right one under a one-QB book, where ESPN's
+  // values genuinely do under-price the QBs this lineup starts two of.
+  it('keeps the under-pricing warning when the book is a one-QB one', () => {
+    const ref = buildReference(build([], { ...DEFAULT_SETTINGS, scoring: 'PPR' }))
     expect(ref).toContain('under-price QBs')
+    expect(ref).not.toContain('difference of format')
   })
 
   it('lists every player, ranked, with team and both values', () => {

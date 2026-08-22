@@ -101,10 +101,20 @@ export function SettingsPane({
       <label className="field">
         <span>Scoring</span>
         <select value={settings.scoring} onChange={(e) => onChange({ scoring: e.target.value as Scoring })}>
+          <option value="SUPERFLEX">Superflex</option>
           <option value="PPR">PPR</option>
           <option value="STANDARD">Standard</option>
         </select>
       </label>
+
+      {settings.scoring === 'SUPERFLEX' && (
+        <div className="field-note">
+          Superflex is this league's format — the OP slot takes a QB. ESPN's ranks
+          and values follow it. The <em>market</em> column doesn't: ESPN publishes
+          a single average across all leagues, nearly all one-QB, so it reads low
+          on quarterbacks. There is no superflex version of it to fetch.
+        </div>
+      )}
 
       <div className="field-note">
         Rankings {fetchedAt ? `updated ${describeAge(fetchedAt)}` : 'not yet loaded'}.

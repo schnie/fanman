@@ -5,11 +5,18 @@ import { summarizeMarket } from './market'
 import { DEFAULT_SETTINGS, type DraftState, type Pick, type Player, type Settings } from './types'
 import { makePlayer } from '../test/factories'
 
+// Pinned to a one-QB book rather than inherited from DEFAULT_SETTINGS, which
+// is SUPERFLEX. Most of what this module decides rides on `marketPremium`, and
+// that signal only exists where `espnValue` and `marketValue` come from the
+// same book — under superflex it is undefined by design. The tests that cover
+// *that* path set `scoring` themselves, so both behaviours stay asserted and
+// neither can be turned off by a change to the default.
 const settings = (over: Partial<Settings> = {}): Settings => ({
   ...DEFAULT_SETTINGS,
   budget: 200,
   slots: 15,
   teamCount: 12,
+  scoring: 'PPR',
   ...over,
 })
 
@@ -128,6 +135,19 @@ describe('draining', () => {
     expect(advice.pick.premium).toBe(16)
   })
 
+  // Under superflex there is no premium to read (`marketPremium` is undefined:
+  // book and market come from different books), so the discount planted on P5
+  // is invisible and the sort has to fall through to price. That is the right
+  // degradation here — absent a known overpay, the priciest body we don't need
+  // is still the one that pulls the most money out of the room.
+  it('falls back to the priciest body when superflex leaves no premium to read', () => {
+    const players = board(204)
+    players[4] = makePlayer({ ...players[4], espnValue: 40 })
+    const advice = move(players, [], { scoring: 'SUPERFLEX' })
+    expect(advice.pick.player.id).toBe(1)
+    expect(advice.pick.premium).toBeUndefined()
+  })
+
   it('prefers a position we no longer need over a more expensive one we do', () => {
     // Three won RBs fill RB1, RB2 and the OP slot, so RB stops being a need
     // while WR is still open. The cheaper RB is the better nomination.
@@ -182,6 +202,24 @@ describe('buying', () => {
     const advice = move(players)
     expect(advice.pick.player.id).toBe(4)
     expect(advice.pick.premium).toBe(-6)
+  })
+
+  // The mirror of the case above, and the reason the superflex fallback sorts
+  // *up* on price rather than reusing the descending tiebreak. The tier is the
+  // set of near-identical players; without a premium to pick the coolest, the
+  // cheapest is the closest thing to the same intent. Sorting down would hand
+  // back the tier leader — precisely the player this branch exists to skip.
+  it('takes the cheapest of the tier when superflex leaves no premium to read', () => {
+    const players = board(204, 200)
+    players[3] = makePlayer({ ...players[3], espnValue: 203 })
+    const advice = move(players, [], { scoring: 'SUPERFLEX' })
+    expect(advice.pick.premium).toBeUndefined()
+    // Still inside the tier, and not its leader.
+    // P8 at $193 — the tail of the same tier the premium version walks, just
+    // found by price instead of by discount. P4's planted $6 discount is
+    // invisible here, which is the point: it isn't a discount, it's two books
+    // disagreeing.
+    expect(advice.pick.player.id).toBe(8)
   })
 
   it('walks a real WR ladder to the tail of the tier and stops at the cliff', () => {

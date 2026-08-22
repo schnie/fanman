@@ -14,7 +14,11 @@ const live = process.env.FANMAN_LIVE ? describe : describe.skip
 
 live('ESPN live endpoints', () => {
   it('returns a ranked, priced board with coaches below it', { timeout: 45_000 }, async () => {
-    const board = await fetchRankings('PPR', 50)
+    // The book we actually ship. `normalize` reads
+    // `draftRanksByRankType[scoring]` and falls back to 0, so if ESPN ever
+    // stops publishing SUPERFLEX the board goes silently unpriced rather than
+    // failing — which is precisely what this file exists to catch.
+    const board = await fetchRankings('SUPERFLEX', 50)
 
     const ranked = board.filter((p) => p.position !== 'HC')
     const coaches = board.filter((p) => p.position === 'HC')
@@ -28,6 +32,18 @@ live('ESPN live endpoints', () => {
 
     const ranks = ranked.map((p) => p.rank)
     expect([...ranks].sort((a, b) => a - b)).toEqual(ranks)
+
+    // The shape check that separates the superflex book from the one-QB ones:
+    // starting two quarterbacks pulls them to the top, and ESPN's 2026 board
+    // opens on six straight. Under PPR the top twelve contain none at all, so
+    // a quiet fallback to the wrong book fails here rather than on draft day.
+    const topQbs = ranked.slice(0, 12).filter((p) => p.position === 'QB')
+    expect(topQbs.length).toBeGreaterThanOrEqual(3)
+    expect(topQbs.every((p) => p.espnValue > 0)).toBe(true)
+
+    // Ranks are sparse in this book — 1, 3, 5, 7, 8, … — so nothing may assume
+    // they run consecutively. Sorted, yes; dense, no.
+    expect(ranked.at(-1)!.rank).toBeGreaterThanOrEqual(ranked.length)
 
     // --- coaches: unpriced by ESPN, valued by us, and always last ---
     expect(coaches).toHaveLength(32)
