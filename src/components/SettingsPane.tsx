@@ -257,7 +257,13 @@ function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean 
       <button className="wide" onClick={check} disabled={busy}>
         {state === 'checking' ? 'Checking…' : 'Check for update'}
       </button>
-      {CHECK_NOTE[state] && <div className="field-note">{CHECK_NOTE[state]}</div>}
+      {/*
+        Always rendered, empty or not: `idle` and `checking` have nothing to
+        say, but dropping the element collapsed the gap and left the two
+        buttons touching on first open — the state the section is in most of
+        the time. `.update-note` reserves the line instead.
+      */}
+      <div className="field-note update-note">{CHECK_NOTE[state]}</div>
 
       {reinstall === 'confirm' ? (
         <div className="danger-confirm">

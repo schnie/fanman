@@ -1242,6 +1242,18 @@
   text-decoration: underline;
 }
 
+/*
+ * The update check's note is empty in two of its six states, and an element
+ * with no text has no height, so the Check and Reinstall buttons closed the
+ * gap between them on first open and reopened it the moment a check reported
+ * back. Reserving one line keeps the section still. The number mirrors
+ * `.field-note` above — one line at its line-height plus its own padding,
+ * which `box-sizing: border-box` folds into the min-height.
+ */
+.update-note {
+  min-height: calc(1.5em + 24px);
+}
+
 .wide {
   width: 100%;
   min-height: 50px;

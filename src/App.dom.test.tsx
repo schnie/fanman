@@ -1537,6 +1537,24 @@ describe('the app version section', () => {
     expect(await screen.findByText(/on the latest build/)).toBeInTheDocument()
   })
 
+  /**
+   * The note is empty in `idle` and `checking`, but it still has to occupy its
+   * line. Rendering it conditionally made an element with no height, so the
+   * Check and Reinstall buttons sat touching on first open and sprang apart the
+   * moment a check reported back. It is the same node throughout — the space is
+   * reserved in `.update-note`, which a jsdom test cannot measure.
+   */
+  it('keeps the note in place between the buttons before any check has run', async () => {
+    const user = await openSettings(fakeUpdates())
+
+    const note = document.querySelector('.update-note')
+    expect(note).toBeEmptyDOMElement()
+
+    await user.click(screen.getByRole('button', { name: 'Check for update' }))
+
+    await waitFor(() => expect(note).toHaveTextContent(/on the latest build/))
+  })
+
   it('promises the reload rather than leaving you to guess', async () => {
     const user = await openSettings(fakeUpdates({ check: async () => 'updating' }))
 
