@@ -622,6 +622,31 @@ describe('draft board end to end', () => {
     expect(search).toHaveFocus()
   })
 
+  it('clears and drops the search once the bid is entered, either way', async () => {
+    // The search was how you found the player being bid on; the moment the
+    // gavel falls it is a one-row board with a keyboard over it. Both halves
+    // of the sheet lead here — winning and crossing off.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    const search = screen.getByPlaceholderText('Search players…')
+    await user.type(search, 'Gibbs')
+    await win(user, 'Jahmyr Gibbs', 40)
+
+    expect(search).toHaveValue('')
+    // Blurred, so the phone keyboard gets out of the way of the whole board.
+    expect(search).not.toHaveFocus()
+    expect(await findRow('Puka Nacua')).toBeInTheDocument()
+
+    await user.type(search, 'Nacua')
+    await crossOff(user, 'Puka Nacua', 30)
+
+    expect(search).toHaveValue('')
+    expect(search).not.toHaveFocus()
+    expect(await findRow('Josh Allen')).toBeInTheDocument()
+  })
+
   it('shows the clear button only when there is something to clear', async () => {
     const user = userEvent.setup()
     render(<App adapter={new FakeAdapter()} />)
