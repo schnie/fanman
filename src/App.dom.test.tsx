@@ -220,7 +220,10 @@ describe('draft board end to end', () => {
 
   it('keeps the board usable when ESPN is unreachable', async () => {
     const adapter = new FakeAdapter()
-    adapter.rankings = { players: ROSTER, scoring: 'PPR', fetchedAt: Date.now() }
+    // Tracks the default rather than naming a format: a cache saved under
+    // different scoring is deliberately ignored, so pinning 'PPR' here would
+    // turn a change of default into an unexplained empty board.
+    adapter.rankings = { players: ROSTER, scoring: DEFAULT_SETTINGS.scoring, fetchedAt: Date.now() }
     adapter.fetchRankings = async () => {
       throw new Error('offline')
     }
