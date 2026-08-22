@@ -65,9 +65,27 @@ export default function App({
   const adapter = injected ?? fallback
   const online = useOnline()
   const draft = useDraft(adapter)
-  const { players, fetchedAt, loading, error, refresh } = useRankings(
+  const { players, boardScoring, fetchedAt, loading, error, refresh } = useRankings(
     adapter,
     draft.state.settings.scoring,
+  )
+
+  /**
+   * The settings, but with the book the loaded board actually came from.
+   *
+   * Everything that prices, sorts or labels a player reads this instead of
+   * `draft.state.settings`. Changing the setting starts a refetch and does not
+   * change the rows already on screen, so for as long as the two disagree the
+   * board must be read in its own book — otherwise a refetch that fails leaves
+   * one-QB values being priced as superflex ones, with the warning that would
+   * have said so switched off by the very tap that broke it.
+   */
+  const boardSettings = useMemo(
+    () =>
+      boardScoring === null
+        ? draft.state.settings
+        : { ...draft.state.settings, scoring: boardScoring },
+    [draft.state.settings, boardScoring],
   )
 
   const scout = useScout(
@@ -80,8 +98,8 @@ export default function App({
 
   // Room-wide auction state: how much money is still chasing how much value.
   const market = useMemo(
-    () => summarizeMarket(players, draft.picks, draft.state.settings),
-    [players, draft.picks, draft.state.settings],
+    () => summarizeMarket(players, draft.picks, boardSettings),
+    [players, draft.picks, boardSettings],
   )
 
   /**
@@ -95,14 +113,14 @@ export default function App({
    * moves only when the board is refetched.
    */
   const marketGap = useMemo(() => {
-    const scoring = draft.state.settings.scoring
+    const scoring = boardSettings.scoring
     return new Map<string, number | undefined>(
       FILTERS.filter((f) => f !== 'ALL' && f !== 'OP').map((pos) => [
         pos,
         marketVsBookPct(players, scoring, pos),
       ]),
     )
-  }, [players, draft.state.settings.scoring])
+  }, [players, boardSettings.scoring])
 
   // Who to throw out next, and whether we're draining the room or buying.
   // Derived from the same market and budget numbers the header shows, so the
@@ -113,10 +131,10 @@ export default function App({
         players,
         picks: draft.picks,
         summary: draft.summary,
-        settings: draft.state.settings,
+        settings: boardSettings,
         market,
       }),
-    [players, draft.picks, draft.summary, draft.state.settings, market],
+    [players, draft.picks, draft.summary, boardSettings, market],
   )
 
   /**
@@ -376,9 +394,9 @@ export default function App({
             looks entirely healthy. Not dismissible — this league's lineup
             starts two quarterbacks, so there is no reading of this state that
             is correct, and the button ends it in one tap. */}
-        {bookMismatch(draft.state.settings) && (
+        {bookMismatch(boardSettings) && (
           <div className="banner warn">
-            This board is {draft.state.settings.scoring}, but your lineup starts two
+            This board is {boardSettings.scoring}, but your lineup starts two
             quarterbacks. ESPN's superflex values are the ones that apply here —
             on this board QBs are priced far below what they are worth.
             <button onClick={() => draft.updateSettings({ scoring: 'SUPERFLEX' })}>
@@ -423,8 +441,8 @@ export default function App({
               // Crossing off opens the keypad: the sale price is what keeps
               // the room's remaining money honest. Skippable in one tap.
               onPrice={openSold}
-              room={displayRoomPrice(p, market.inflation, draft.state.settings.scoring)}
-              scoring={draft.state.settings.scoring}
+              room={displayRoomPrice(p, market.inflation, boardSettings.scoring)}
+              scoring={boardSettings.scoring}
               // Scoped to the player's own position: receivers on bye say
               // nothing about the quarterback you're bidding on. Our own bye
               // never clashes with itself, so a player we already own is
@@ -513,7 +531,8 @@ export default function App({
           player={sheet.player}
           state={draft.state}
           mode={sheet.mode}
-          roomPrice={displayRoomPrice(sheet.player, market.inflation, draft.state.settings.scoring)}
+          roomPrice={displayRoomPrice(sheet.player, market.inflation, boardSettings.scoring)}
+          scoring={boardSettings.scoring}
           marketVsBookPct={marketGap.get(sheet.player.position)}
           onCancel={() => setSheet(null)}
           onConfirm={(price) => {

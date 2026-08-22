@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import {
+  anchorIsBook,
   isUnpriced,
-  marketIsComparable,
   marketPremium,
   marketTrend,
   observedPrice,
@@ -254,7 +254,7 @@ function PlayerValue({ player, room, scoring }: { player: Player; room?: number;
     // superflex row read `$11 room $55` against a header saying ×1.20 and
     // invited exactly one conclusion: that the app cannot multiply. Adjacency
     // is the only provenance a phone gets; there is no hover to explain it.
-    const roomFromBook = !marketIsComparable(scoring)
+    const roomFromBook = anchorIsBook(player, scoring)
     const roomChip =
       room === undefined ? null : (
         <span

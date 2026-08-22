@@ -2209,3 +2209,87 @@ describe('the book the board was priced from', () => {
     expect(container.querySelector('.val-espn .val-room')).toBeNull()
   })
 })
+
+describe('the board keeps the book it was fetched with', () => {
+  /** Serves a cached PPR board and can never reach the network. */
+  class OfflinePprBoard extends FakeAdapter {
+    constructor() {
+      super()
+      this.draft = {
+        settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+        // Non-empty, so migrateSettings leaves the one-QB book in place.
+        log: [{ playerId: 2, status: 'gone', price: 30, at: 1 }],
+      }
+      this.rankings = { players: ROSTER, scoring: 'PPR', fetchedAt: Date.now() }
+    }
+    override fetchRankings = async (): Promise<Player[]> => {
+      throw new Error('offline')
+    }
+  }
+
+  // The trap: tapping the banner's button changes the *setting*, which starts a
+  // refetch. It does not change the rows on screen. When that refetch fails —
+  // venue wifi, mid-auction, the scenario this whole app is built around — the
+  // one-QB rows are still there, and keying anything off the setting would have
+  // priced them as superflex values with the warning switched off by the very
+  // tap that broke it.
+  it('keeps warning after a switch whose refetch never lands', async () => {
+    const user = userEvent.setup()
+    const adapter = new OfflinePprBoard()
+    render(<App adapter={adapter} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Use superflex' }))
+    await waitFor(() => expect(adapter.draft?.settings.scoring).toBe('SUPERFLEX'))
+
+    // The setting moved; the board did not. The banner follows the board.
+    expect(await screen.findByRole('button', { name: 'Use superflex' })).toBeInTheDocument()
+    expect(screen.getByText(/This board is PPR/)).toBeInTheDocument()
+  })
+
+  it('stops warning once the new board actually arrives', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    adapter.draft = {
+      settings: { ...DEFAULT_SETTINGS, scoring: 'PPR' },
+      log: [{ playerId: 2, status: 'gone', price: 30, at: 1 }],
+    }
+    render(<App adapter={adapter} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Use superflex' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Use superflex' })).not.toBeInTheDocument(),
+    )
+  })
+})
+
+describe('the room chip names the value it actually used', () => {
+  // 86 of the top 300 on the live board carry a $0 book and a real market
+  // average, so `priceAnchor` falls back to the market figure for nearly a
+  // third of the rows even under superflex. Labelling those "book" would be
+  // the same misread this guard exists to prevent, merely inverted.
+  class BooklessBoard extends FakeAdapter {
+    override fetchRankings = async () => [
+      makePlayer({ id: 1, name: 'Ranked Player', position: 'RB', rank: 1, espnValue: 46, marketValue: 11 }),
+      makePlayer({ id: 2, name: 'Deep Bench', position: 'RB', rank: 0, espnValue: 0, marketValue: 4 }),
+    ]
+  }
+
+  it('keeps the chip with the market figure when ESPN priced no book', async () => {
+    const { container } = render(<App adapter={new BooklessBoard()} />)
+    await findRow('Deep Bench')
+
+    const deep = container.querySelector('[data-row-anchor="2"]')!
+    expect(deep.querySelector('.val-market .val-room')).not.toBeNull()
+    expect(deep.querySelector('.val-espn .val-room')).toBeNull()
+  })
+
+  it('still puts it with the book on a row ESPN did price', async () => {
+    const { container } = render(<App adapter={new BooklessBoard()} />)
+    await findRow('Ranked Player')
+
+    const ranked = container.querySelector('[data-row-anchor="1"]')!
+    expect(ranked.querySelector('.val-espn .val-room')).not.toBeNull()
+    expect(ranked.querySelector('.val-market .val-room')).toBeNull()
+  })
+})

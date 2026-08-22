@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { bookMismatch, buildLineup, lineupIsSuperflex, STARTER_SLOTS } from './lineup'
+import {
+  bookMismatch,
+  buildLineup,
+  lineupIsSuperflex,
+  STARTER_SLOTS,
+  type LineupSlot,
+} from './lineup'
 import { DEFAULT_SETTINGS, type Pick, type Player, type Settings } from './types'
 
 let nextId = 1
@@ -235,5 +241,33 @@ describe('bookMismatch', () => {
   it('says nothing when the lineup is not superflex either', () => {
     const op = STARTER_SLOTS.findIndex((s) => s.id === 'OP')
     expect(bookMismatch(at({ scoring: 'PPR', slots: op }))).toBe(false)
+  })
+})
+
+describe('lineupIsSuperflex does not depend on slot ids', () => {
+  // The first version excluded the dedicated slot by testing `id !== 'QB'`,
+  // which made the whole check hang on that id staying exactly `QB` — while
+  // the lineup beside it already uses the `RB1`/`RB2` convention. Renaming the
+  // starter to `QB1` would then have reported a one-QB league as superflex and
+  // raised a banner that cannot be dismissed, whose button switches a correct
+  // board to the wrong book.
+  const renamed: LineupSlot[] = [
+    { id: 'QB1', label: 'QB', accepts: ['QB'] },
+    { id: 'RB1', label: 'RB', accepts: ['RB'] },
+    { id: 'FLEX', label: 'FLEX', accepts: ['RB', 'WR', 'TE'] },
+  ]
+
+  it('calls a renamed one-QB lineup what it is', () => {
+    expect(lineupIsSuperflex(renamed.length, renamed)).toBe(false)
+  })
+
+  it('counts a second QB-taking slot whatever it is called', () => {
+    const superflex: LineupSlot[] = [
+      ...renamed,
+      { id: 'ANYTHING', label: 'SF', accepts: ['QB', 'RB', 'WR', 'TE'] },
+    ]
+    expect(lineupIsSuperflex(superflex.length, superflex)).toBe(true)
+    // ...and still truncates: the extra slot is out of reach on a short roster.
+    expect(lineupIsSuperflex(renamed.length, superflex)).toBe(false)
   })
 })

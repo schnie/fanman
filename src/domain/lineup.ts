@@ -43,12 +43,19 @@ export const STARTER_SLOTS: LineupSlot[] = [
  *
  * Takes `slots` because a short roster truncates `STARTER_SLOTS`: with fewer
  * than seven starters the OP slot isn't in the lineup at all, and then the
- * league genuinely is a one-QB one.
+ * league genuinely is a one-QB one. `lineup` is a parameter only so the rule
+ * can be tested against ids other than the ones this league happens to use —
+ * the whole point is that it does not depend on them.
  */
-export function lineupIsSuperflex(slots: number): boolean {
-  return STARTER_SLOTS.slice(0, Math.max(0, slots)).some(
-    (slot) => slot.id !== 'QB' && slot.accepts.includes('QB'),
-  )
+export function lineupIsSuperflex(slots: number, lineup: LineupSlot[] = STARTER_SLOTS): boolean {
+  const takesQb = lineup.slice(0, Math.max(0, slots)).filter((slot) => slot.accepts.includes('QB'))
+  // Two or more slots that will take a quarterback, counted rather than
+  // identified. The first version excluded the dedicated slot by its id, which
+  // quietly made the whole check depend on that id staying exactly `QB` — and
+  // the lineup two lines below already uses `RB1`/`RB2`, so `QB1` is one
+  // ordinary edit away from reporting a one-QB league as superflex and raising
+  // a banner that cannot be dismissed.
+  return takesQb.length >= 2
 }
 
 /**

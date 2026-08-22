@@ -279,7 +279,10 @@ The market column itself is untouched — still displayed, still ESPN's figure,
 still carrying its measured caveat. This changes what we *predict*, not what
 we *report*.
 
-**The room chip renders beside the value it was computed from.** It used to
+**The room chip renders beside the value it was computed from**, asked via
+`anchorIsBook` rather than re-derived — `priceAnchor` falls back to the market
+figure whenever ESPN published no book value, which on the live board is 86 of
+the top 300 rows, and labelling those "book" is the same misread inverted. It used to
 sit inside `.val-market` unconditionally, which was right until the anchor
 moved: a superflex row then read `$11 room $55` under a header saying `×1.20`,
 and the only conclusion available to a reader is that the app cannot multiply.
@@ -291,8 +294,19 @@ inherited, it changed size with the scoring format.
 `DEFAULT_SETTINGS` only reaches a device with nothing stored, so
 `migrateSettings` corrects a saved draft on load — but **only before the draft
 opens**. Switching the book invalidates the rankings cache (it is keyed on
-scoring), so the next paint has nothing until a refetch lands, and betting the
-board on venue wifi mid-auction is the thing this app is built not to do.
+scoring), so the board cannot become the new book until a refetch lands, and
+betting that on venue wifi mid-auction is the thing this app is built not to do.
+
+What is on screen in the meantime is the *old* book's rows — `useRankings`
+never clears `players`, deliberately, because an empty board mid-auction is the
+failure being avoided. So the board carries the book it was fetched with
+(`boardScoring`), `App` derives `boardSettings` from it, and **everything that
+prices, sorts or labels a player reads that rather than the setting**. Without
+it, tapping the banner's own button on bad wifi left one-QB rows being priced
+as superflex values with the warning switched off by the very tap that broke
+it — the setting said superflex, so the mismatch check went quiet, while the
+only thing on screen was a staleness banner describing *age*, not the wrong
+book.
 
 The cost of that refusal is a draft running on one-QB values while every other
 part of the app looks healthy, and the symptom — quarterbacks at a fraction of
