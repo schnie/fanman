@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { canBid, previewBid } from '../domain/budget'
-import { marketIsComparable, type DraftState, type Player } from '../domain/types'
+import {
+  marketIsComparable,
+  type DraftState,
+  type Player,
+  type Scoring,
+} from '../domain/types'
 
 /**
  * The empty-keypad prompt, shared by both modes. Whose money it is changes what
@@ -18,6 +23,7 @@ export function BidSheet({
   player,
   state,
   roomPrice,
+  scoring,
   marketVsBookPct,
   mode = 'bid',
   onConfirm,
@@ -25,8 +31,21 @@ export function BidSheet({
 }: {
   player: Player
   state: DraftState
-  /** What this player is likely to actually cost, after inflation. */
+  /**
+   * What this player is likely to actually cost, after inflation. Already
+   * suppressed by `displayRoomPrice` when it matches the number it came from,
+   * so there is nothing left for this sheet to second-guess — it used to
+   * re-check against `marketValue`, which under superflex is not the figure
+   * that fed the calculation and hid the price at coincidental collisions.
+   */
   roomPrice?: number
+  /**
+   * The book the loaded board came from, which is not always the one in
+   * Settings — see `boardSettings` in `App`. Read from here rather than from
+   * `state.settings` so a refetch that has not landed cannot relabel the rows
+   * already on screen.
+   */
+  scoring: Scoring
   /**
    * How the market column reads against the book at *this player's* position,
    * measured off the loaded board — see `marketVsBookPct`. Undefined when the
@@ -42,7 +61,7 @@ export function BidSheet({
   // ESPN's market average has no superflex variant — see `marketIsComparable`.
   // The book value beside it does follow the format, so on this screen the two
   // numbers disagree hardest exactly where the money is: quarterbacks.
-  const marketMatchesFormat = marketIsComparable(state.settings.scoring)
+  const marketMatchesFormat = marketIsComparable(scoring)
 
   const [raw, setRaw] = useState('')
   const price = raw === '' ? 0 : parseInt(raw, 10)
@@ -66,7 +85,7 @@ export function BidSheet({
           <div className="sheet-sub">
             {player.position} · ESPN ${player.espnValue} · market ${player.marketValue}
             {!marketMatchesFormat && '*'}
-            {roomPrice !== undefined && roomPrice !== Math.round(player.marketValue) && (
+            {roomPrice !== undefined && (
               <> · <strong>this room ~${roomPrice}</strong></>
             )}
           </div>

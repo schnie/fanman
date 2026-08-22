@@ -132,14 +132,24 @@ export function marketIsComparable(scoring: Scoring): boolean {
  * So where the market column doesn't match the format, the book does, and the
  * book wins. Under a one-QB book nothing changes.
  *
- * The `|| p.marketValue` tail is for the deep bench, where ESPN ranks nobody
- * and publishes no book value but the market still prices the player. Anchor
- * those to the only number that exists rather than to zero, which would price
- * every one of them at the $1 floor.
+ * `anchorIsBook` is the same rule as a predicate, and everything that needs to
+ * *describe* the anchor asks it rather than re-deriving the condition — the UI
+ * labels the chip by provenance, and a second copy of the rule is a second
+ * thing to keep in step.
+ *
+ * It is false for the deep bench even under superflex: ESPN ranks nobody down
+ * there and publishes no book value, but the market still prices the player,
+ * so the anchor falls back to the only number that exists rather than to zero,
+ * which would put every one of them at the $1 floor. That population is not
+ * marginal — 86 of the top 300 on the live 2026 board carry a $0 book and a
+ * real market average.
  */
+export function anchorIsBook(p: Player, scoring: Scoring): boolean {
+  return !marketIsComparable(scoring) && p.espnValue > 0
+}
+
 export function priceAnchor(p: Player, scoring: Scoring): number {
-  if (marketIsComparable(scoring)) return p.marketValue
-  return p.espnValue || p.marketValue
+  return anchorIsBook(p, scoring) ? p.espnValue : p.marketValue
 }
 
 /**

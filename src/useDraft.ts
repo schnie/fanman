@@ -85,6 +85,18 @@ export function useDraft(adapter: DataAdapter) {
 export function useRankings(adapter: DataAdapter, scoring: Settings['scoring']) {
   const [players, setPlayers] = useState<Player[]>([])
   const [fetchedAt, setFetchedAt] = useState<number | null>(null)
+  /**
+   * The book the board in `players` was actually fetched with, which is not
+   * always the one in Settings.
+   *
+   * Changing the setting starts a refetch; it does not change the rows already
+   * on screen, and a refetch that fails leaves them there — deliberately, since
+   * an empty board mid-auction is the failure this app is built to avoid. But
+   * every price we derive is only meaningful in the book its inputs came from,
+   * so the board and its book travel together and the UI reads *this*, never
+   * the setting. Null until a board lands, when there is nothing to price.
+   */
+  const [boardScoring, setBoardScoring] = useState<Settings['scoring'] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -96,6 +108,7 @@ export function useRankings(adapter: DataAdapter, scoring: Settings['scoring']) 
       const cached: CachedRankings = { players: fresh, scoring, fetchedAt: Date.now() }
       setPlayers(fresh)
       setFetchedAt(cached.fetchedAt)
+      setBoardScoring(scoring)
       // Persist after painting. Writing is a synchronous stringify + setItem,
       // and nothing until the next cold start depends on it finishing.
       void adapter.saveRankings(cached)
@@ -115,6 +128,7 @@ export function useRankings(adapter: DataAdapter, scoring: Settings['scoring']) 
       if (!cancelled && cached && cached.scoring === scoring) {
         setPlayers(cached.players)
         setFetchedAt(cached.fetchedAt)
+        setBoardScoring(cached.scoring)
         setLoading(false)
       }
       if (!cancelled) refresh()
@@ -124,5 +138,5 @@ export function useRankings(adapter: DataAdapter, scoring: Settings['scoring']) 
     }
   }, [adapter, scoring, refresh])
 
-  return { players, fetchedAt, loading, error, refresh }
+  return { players, boardScoring, fetchedAt, loading, error, refresh }
 }

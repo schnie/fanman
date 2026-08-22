@@ -1,4 +1,4 @@
-import type { Pick, Player } from './types'
+import type { Pick, Player, Settings } from './types'
 
 export interface LineupSlot {
   /** Unique within the lineup — `RB1`, `RB2`. */
@@ -12,9 +12,8 @@ export interface LineupSlot {
  * What this league's OP ("offensive player") slot will take — any offensive
  * skill position, **including quarterback**. That makes it superflex-shaped
  * rather than a normal FLEX, which matters well beyond the label: a second
- * startable QB slot raises quarterback value sharply, and ESPN's ranks — in
- * either scoring format — assume a one-QB league, so they systematically
- * under-price QBs here.
+ * startable QB slot raises quarterback value sharply, which is why the board
+ * is fetched from ESPN's SUPERFLEX rank book rather than a one-QB one.
  *
  * Exported because the board's OP filter must agree with the lineup builder —
  * one edit, not two that can silently drift apart.
@@ -35,6 +34,44 @@ export const STARTER_SLOTS: LineupSlot[] = [
   // League-specific: a head coach slot, drafted like a D/ST (you pick a team).
   { id: 'HC', label: 'HC', accepts: ['HC'] },
 ]
+
+/**
+ * True when the starting lineup can field a second quarterback — which is the
+ * whole reason this league reads ESPN's SUPERFLEX book rather than a one-QB
+ * one. Derived from `accepts` rather than from the `OP` label, so a lineup
+ * that renames the slot still answers correctly.
+ *
+ * Takes `slots` because a short roster truncates `STARTER_SLOTS`: with fewer
+ * than seven starters the OP slot isn't in the lineup at all, and then the
+ * league genuinely is a one-QB one. `lineup` is a parameter only so the rule
+ * can be tested against ids other than the ones this league happens to use —
+ * the whole point is that it does not depend on them.
+ */
+export function lineupIsSuperflex(slots: number, lineup: LineupSlot[] = STARTER_SLOTS): boolean {
+  const takesQb = lineup.slice(0, Math.max(0, slots)).filter((slot) => slot.accepts.includes('QB'))
+  // Two or more slots that will take a quarterback, counted rather than
+  // identified. The first version excluded the dedicated slot by its id, which
+  // quietly made the whole check depend on that id staying exactly `QB` — and
+  // the lineup two lines below already uses `RB1`/`RB2`, so `QB1` is one
+  // ordinary edit away from reporting a one-QB league as superflex and raising
+  // a banner that cannot be dismissed.
+  return takesQb.length >= 2
+}
+
+/**
+ * The board is priced from a book that does not match the lineup.
+ *
+ * This is reachable by design, not by accident: `migrateSettings` deliberately
+ * refuses to switch books mid-draft, because doing so drops the cached board
+ * and betting on venue wifi in the middle of an auction is the one thing this
+ * app is built not to do. The cost of that choice is a draft that runs on
+ * one-QB values while every other part of the app looks correct, and the
+ * symptom — quarterbacks priced at a fraction of their worth — reads as an
+ * ESPN problem rather than as a setting. So it has to be said out loud.
+ */
+export function bookMismatch(settings: Settings): boolean {
+  return lineupIsSuperflex(settings.slots) && settings.scoring !== 'SUPERFLEX'
+}
 
 export interface LineupRow {
   /** Stable key for React. */

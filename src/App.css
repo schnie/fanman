@@ -778,14 +778,21 @@
 }
 
 /* The price this room will actually pay. Labelled, because an unlabelled
-   third number in a row of numbers is worse than no number. */
+   third number in a row of numbers is worse than no number.
+
+   Sized explicitly rather than by inheritance: the chip renders beside
+   whichever value it was computed from, so it sits inside .val-market (12px)
+   under a one-QB book and inside .val-espn (17px bold) under superflex. Left
+   to inherit it changed size depending on the scoring format. */
 .val-room {
   margin-left: 6px;
   padding: 0 4px;
   border-radius: 3px;
   background: var(--surface-2);
   color: var(--text);
+  font-size: 12px;
   font-weight: 600;
+  vertical-align: 1px;
 }
 
 /* Direction only, and smaller than the premium: this is a tertiary signal that
