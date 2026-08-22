@@ -269,7 +269,7 @@ hurt". Reach for it when the subject changes, not to save money: history is the
 cheapest part of a question, and the board sits behind the same cache either
 side of the line.
 
-Answers are Claude's, not ESPN's, and every one of them is labelled as such
+Answers are generated, not ESPN's, and every one is badged **SCHNIE AI**
 where you read it rather than in a note somewhere else in the tab — check
 anything load-bearing before you spend $60 on it. The transcript survives a
 reload and is cleared when you reset the draft.

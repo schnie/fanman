@@ -84,6 +84,42 @@ describe('sendableHistory', () => {
     expect(texts(turns, 10)).toEqual(['d', 'e'])
   })
 
+  /**
+   * The API rejects a message list that opens on an assistant turn. Alternating
+   * turns make that look unreachable, but a failure appends two turns and drops
+   * both while its question survives — so one failure earlier in a topic makes
+   * the surviving list odd and the window opens mid-exchange.
+   */
+  it('never opens on an answer, even when a failure has skewed the history', () => {
+    const turns = [
+      user('q1'), bot('a1'), user('q2'), bot('a2'),
+      user('q3'), bad('half'), bad('Rate limited'),
+      user('q4'), bot('a4'), user('q5'), bot('a5'),
+      user('q6'), bot('a6'), user('q7'), bot('a7'),
+    ]
+    const out = sendableHistory(turns)
+    expect(out[0].role).toBe('user')
+    expect(out[0].text).toBe('q2')
+  })
+
+  it('opens on a user turn for every window size', () => {
+    const turns = [
+      user('q1'), bot('a1'), user('q2'), bad('oops'), user('q3'), bot('a3'), user('q4'),
+    ]
+    for (let limit = 1; limit <= 8; limit++) {
+      const out = sendableHistory(turns, limit)
+      if (out.length > 0) expect(out[0].role, `limit ${limit}`).toBe('user')
+    }
+  })
+
+  /**
+   * An answer that produced no text would go back as an empty content block,
+   * which the API rejects — one silent blank would break the rest of the topic.
+   */
+  it('drops a turn with no text in it', () => {
+    expect(texts([user('q1'), bot('   '), user('q2')])).toEqual(['q1', 'q2'])
+  })
+
   it('combines all three rules', () => {
     const turns = [
       user('dropped by divider'),

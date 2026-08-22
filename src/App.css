@@ -1787,6 +1787,14 @@ hr {
   white-space: pre-wrap;
 }
 
+/* A cut-off answer is still worth reading — the recommendation is in the first
+   sentence — but it must not sit there looking finished. */
+.chat-truncated {
+  margin: 6px 0 0;
+  color: var(--amber);
+  font-size: 12px;
+}
+
 .chat-searched {
   margin: 6px 0 0;
   color: var(--muted);

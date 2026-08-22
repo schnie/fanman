@@ -80,11 +80,6 @@ class FakeAdapter implements DataAdapter {
    * Overridden per-test where the chat is the thing under test. An async
    * generator, so a test can script the exact delta sequence the real client
    * would produce — including a failure part-way through an answer.
-   */
-  /**
-   * Overridden per-test where the chat is the thing under test. An async
-   * generator, so a test can script the exact delta sequence the real client
-   * would produce — including a failure part-way through an answer.
    *
    * The default fails on the first read, like the browser adapter with no key
    * stored. Written as a function *returning* a generator rather than as a
@@ -1697,6 +1692,87 @@ describe('ask', () => {
       expect(screen.getByPlaceholderText('Ask about the draft…')).not.toBeDisabled(),
     )
     await user.click(screen.getByRole('button', { name: 'Board' }))
+  })
+
+  /**
+   * The openers are a second way to send, and they were gated on the key
+   * alone — so offline they looked live and did nothing at all, which is the
+   * exact swallow the compose box was changed to stop doing.
+   */
+  it('does not offer live-looking openers with no way to send them', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    await openAsk(adapter)
+    expect(screen.getByRole('button', { name: 'Who should I nominate next?' })).toBeInTheDocument()
+
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
+    window.dispatchEvent(new Event('offline'))
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: 'Who should I nominate next?' }),
+      ).not.toBeInTheDocument(),
+    )
+
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+    window.dispatchEvent(new Event('online'))
+  })
+
+  /**
+   * A cut-off answer is still worth reading, but must not sit there looking
+   * finished — the reader would take a half-sentence for the whole verdict.
+   */
+  it('says when an answer was cut off rather than letting it read as finished', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      yield { type: 'text', text: 'Bid up to $44 because the market has' }
+      yield { type: 'done', searches: [], sources: [], truncated: true }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'What should I pay?')
+
+    expect(await screen.findByText(/Bid up to \$44/)).toBeInTheDocument()
+    expect(screen.getByText(/Cut off before it finished/)).toBeInTheDocument()
+  })
+
+  /**
+   * An answer with no text at all would be stored as a blank bubble and then
+   * sent back as an empty content block, which the API rejects — one silent
+   * blank would break every later question in the topic.
+   */
+  it('does not store a blank answer as though it were one', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = async function* (): AsyncGenerator<ChatDelta> {
+      yield { type: 'searching' }
+      yield { type: 'done', searches: ['something'], sources: [] }
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Anything?')
+
+    expect(await screen.findByText(/That came back empty/)).toBeInTheDocument()
+    // Stored as a failure, so it never goes back to the model.
+    await waitFor(() => expect(adapter.chatTurns.at(-1)?.failed).toBe(true))
+  })
+
+  /** The meter is labelled as money spent, so a call that never happened is not one. */
+  it('does not count a rejected key against the spend meter', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    adapter.chat = (_req: ChatRequest): AsyncGenerator<ChatDelta> =>
+      (async function* () {
+        yield await Promise.reject(new ScoutError('API key rejected — check it in Settings', 'auth'))
+      })()
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Who?')
+    await screen.findByText('API key rejected — check it in Settings')
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(screen.getByText(/Ask tab:/)).toHaveTextContent('Ask tab: 0 questions this session')
   })
 
   it('answers a question and keeps both halves of the exchange', async () => {

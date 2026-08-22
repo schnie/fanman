@@ -166,9 +166,11 @@ failure that makes the feature worse than not having it.
 
 **The chat is the one surface where every word is a model's.** The rest of the
 app is careful about whether a number came from ESPN or from us; here nothing
-did. So the attribution rides on each assistant turn (`data-label` →
-`.chat-turn.assistant::before`) rather than on a note under a transcript you
-have already scrolled past, and the system prompt restates the `~`-means-ours
+did. So the attribution rides on each assistant turn — `ASSISTANT_LABEL` →
+`data-label` → `.chat-turn.assistant::before` — rather than on a note under a
+transcript you have already scrolled past. The badge is branded (`SCHNIE AI`)
+but must keep saying *AI*: it is there so a generated answer can never be read
+as something ESPN published, and a bare brand name would not carry that. and the system prompt restates the `~`-means-ours
 rule, the max-bid ceiling and the no-named-rivals rule that
 `domain/nomination.ts` exists to protect. Those three are asserted in
 `chatContext.test.ts` and again, against the real model, in `chat.live.test.ts`.
@@ -183,11 +185,20 @@ transcript through `turnsRef` and claims `busy.current` synchronously in
 
 **The transcript and the send window are separate, and that is what makes "New
 topic" cheap.** `sendableHistory` decides what goes back to the API: everything
-after the last divider, minus failed turns, windowed to `HISTORY_TURNS`. The
-window applies *last* — apply it first and a divider sitting further back than
-the limit falls outside the slice and silently stops working, with the rule
-still rendering on screen while the model reads straight through it.
-`useChat.test.ts` covers that ordering specifically.
+after the last divider, minus failed and empty turns, windowed to
+`HISTORY_TURNS`, then any answer left dangling at the head is dropped.
+
+Two of those four exist because of the same trap, and both are invisible until
+a draft is well underway. The window applies *last* — apply it first and a
+divider further back than the limit falls outside the slice and silently stops
+working, with the rule still rendering while the model reads through it. And
+the head must be a `user` turn, because the API rejects a list that opens on an
+answer: alternating turns make that look unreachable, but a failure appends
+*two* turns and drops both while its question survives, so one failure earlier
+in a topic skews the parity and the window opens mid-exchange. Every question
+after that point 400s until the user happens to start a new topic.
+`useChat.test.ts` covers both, and covers the head rule across every window
+size rather than the one case that was found.
 
 Threading is not a cost lever and shouldn't be sold as one. Measured on a
 full board mid-draft: `reference` ~4.1K tokens (cached), `live` ~2.0K

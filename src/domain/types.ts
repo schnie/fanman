@@ -240,6 +240,12 @@ export interface ChatTurn {
   searches?: string[]
   sources?: ChatSource[]
   failed?: boolean
+  /**
+   * The answer ran into the token ceiling and stopped mid-thought. Not a
+   * failure — the useful part of a reply is its first sentence — but it must
+   * say so rather than reading as a finished answer that simply ended oddly.
+   */
+  truncated?: boolean
 }
 
 /** A turn as the API wants it — no ids, no timestamps, no failures. */

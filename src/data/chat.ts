@@ -7,11 +7,16 @@ import { ScoutError } from './scoutError'
 const MODEL = 'claude-opus-5'
 
 /**
- * Generous, because this streams: the SDK's timeout worry is about a
- * non-streaming request sitting silent, and answers here are meant to be a
- * paragraph, not an essay.
+ * Headroom, not a target.
+ *
+ * Answers here are meant to be a paragraph, so this is never the binding
+ * constraint on length — but thinking is on by default on this model and its
+ * tokens come out of the same budget, so a ceiling sized for the visible
+ * answer alone truncates mid-sentence on the questions that needed the most
+ * reasoning. Streaming means a high ceiling costs nothing in latency or
+ * timeout risk, and output is billed by what is actually produced.
  */
-const MAX_TOKENS = 4000
+const MAX_TOKENS = 16000
 
 /**
  * Searches per turn. Lower than the scout's six — that call is *about* the
@@ -36,7 +41,13 @@ export interface ChatRequest {
 export type ChatDelta =
   | { type: 'text'; text: string }
   | { type: 'searching' }
-  | { type: 'done'; searches: string[]; sources: ChatSource[] }
+  | {
+      type: 'done'
+      searches: string[]
+      sources: ChatSource[]
+      /** The answer stopped at the token ceiling rather than finishing. */
+      truncated?: boolean
+    }
 
 const SYSTEM = `You are a fantasy football draft assistant, answering questions during a LIVE in-person auction draft. The person reading you is on a phone, in a room where someone is counting down a bid. They have seconds, not minutes.
 
@@ -92,6 +103,7 @@ export async function* streamChat(apiKey: string, req: ChatRequest): AsyncGenera
     // A search-heavy turn can hit the server-side tool-iteration cap and come
     // back as `pause_turn`; resuming just means sending it back. Same ladder
     // as the scout, and the same cap on resumes so a loop cannot bill forever.
+    let truncated = false
     for (let resume = 0; ; resume++) {
       const stream = client.messages.stream({
         model: MODEL,
@@ -130,11 +142,23 @@ export async function* streamChat(apiKey: string, req: ChatRequest): AsyncGenera
       if (response.stop_reason === 'refusal') {
         throw new ScoutError('Claude declined to answer that', 'refusal')
       }
-      if (response.stop_reason !== 'pause_turn' || resume >= 3) break
+      if (response.stop_reason !== 'pause_turn') {
+        // Cut off at the ceiling. The half-answer is still worth showing —
+        // it is the top of the reply, which is where this prompt puts the
+        // recommendation — but it must not be badged as a finished one.
+        truncated = response.stop_reason === 'max_tokens'
+        break
+      }
+      // Out of resumes with the turn still paused: whatever we have is a
+      // fragment of a longer answer, same as hitting the ceiling.
+      if (resume >= 3) {
+        truncated = true
+        break
+      }
       messages.push({ role: 'assistant', content: response.content })
     }
 
-    yield { type: 'done', searches, sources }
+    yield { type: 'done', searches, sources, truncated }
   } catch (err) {
     // The failure taxonomy is shared on purpose: it is the same client, the
     // same account and the same set of things that can go wrong, and

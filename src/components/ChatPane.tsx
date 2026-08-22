@@ -2,6 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import type { ChatTurn } from '../domain/types'
 
 /**
+ * What answers are badged with.
+ *
+ * One constant because it appears on every finished turn and again on the one
+ * still streaming, and two string literals drifting apart would show up as the
+ * transcript renaming itself halfway down. It says "AI" deliberately: the
+ * badge exists so a generated answer can never be mistaken for something ESPN
+ * published, and a brand name alone would not carry that.
+ */
+const ASSISTANT_LABEL = 'SCHNIE AI'
+
+/**
  * Openers for an empty transcript.
  *
  * Not decoration: the useful questions here are not the ones people think to
@@ -15,6 +26,22 @@ const OPENERS = [
   'Is my week 9 bye a problem?',
   'What should I pay for the best QB left?',
 ]
+
+/** Fast enough to feel like following, slow enough not to be per-token. */
+const SCROLL_THROTTLE_MS = 120
+
+/**
+ * Close enough to the end that following the answer is what the reader wants.
+ *
+ * The transcript is the document, not an inner scroller, so this asks the
+ * window. jsdom reports every measurement as 0, which lands as "at the
+ * bottom" — the right default for a test that never scrolled.
+ */
+function nearBottom(): boolean {
+  if (typeof window === 'undefined') return true
+  const doc = document.documentElement
+  return doc.scrollHeight - (window.scrollY + window.innerHeight) < 160
+}
 
 function Sources({ sources }: { sources: NonNullable<ChatTurn['sources']> }) {
   return (
@@ -67,27 +94,49 @@ export function ChatPane({
   const foot = useRef<HTMLDivElement>(null)
   const busy = streaming !== null
 
-  // Follow the answer as it arrives. Skipped on the first paint so opening the
-  // tab doesn't yank a restored transcript to its end before it can be read.
+  /**
+   * Follow the answer as it arrives, with two things it must not do.
+   *
+   * It must not animate per token. `streaming` changes on every delta, so a
+   * smooth scroll here queues hundreds of overlapping animations across one
+   * answer, which on a phone reads as the page shuddering. Only a finished
+   * turn is worth animating to; mid-stream it jumps.
+   *
+   * And it must not drag you back. Scrolling up to re-read the roster answer
+   * while the next one streams is a normal thing to do mid-draft, and being
+   * yanked to the bottom every token makes it impossible.
+   *
+   * Skipped on first paint too, so opening the tab doesn't throw a restored
+   * transcript to its end before it can be read.
+   */
   const mounted = useRef(false)
+  const lastScroll = useRef(0)
   useEffect(() => {
     if (!mounted.current) {
       mounted.current = true
       return
     }
+    if (!nearBottom()) return
+    const settled = streaming === null
+    const now = Date.now()
+    if (!settled && now - lastScroll.current < SCROLL_THROTTLE_MS) return
+    lastScroll.current = now
     // jsdom has no layout and no `scrollIntoView`; guarded the same way the
     // app guards `window.scrollTo`.
-    foot.current?.scrollIntoView?.({ block: 'end', behavior: 'smooth' })
+    foot.current?.scrollIntoView?.({ block: 'end', behavior: settled ? 'smooth' : 'auto' })
   }, [turns, streaming])
 
+  const last = turns[turns.length - 1]
+  const canAsk = hasKey && online
+
   const submit = (text: string) => {
-    if (!text.trim() || busy) return
+    // Checked here rather than only on each control, so a new way to send —
+    // an opener, a shortcut — inherits the guard instead of rediscovering it.
+    if (!text.trim() || busy || !canAsk) return
     onSend(text)
     setDraft('')
   }
 
-  const last = turns[turns.length - 1]
-  const canAsk = hasKey && online
   const canRetry = last?.failed === true && canAsk && !busy
   // Nothing to divide, and never two rules in a row.
   const canDivide = Boolean(last) && last.role !== 'divider' && !busy
@@ -112,7 +161,10 @@ export function ChatPane({
             Ask about your roster, the money in the room, or news on a player. It can see the whole
             board and your draft; it searches the web only for things the board can&apos;t know.
           </p>
-          {hasKey &&
+          {/* `canAsk`, not `hasKey`. Gating these on the key alone left four
+              live-looking buttons that did nothing at all offline — the exact
+              swallow the compose box was changed to stop doing. */}
+          {canAsk &&
             OPENERS.map((q) => (
               <button key={q} type="button" className="chat-opener" onClick={() => submit(q)}>
                 {q}
@@ -137,9 +189,14 @@ export function ChatPane({
             // Assistant turns are model output, and a transcript scrolls —
             // so each one carries the attribution itself rather than relying
             // on a note pinned somewhere else in the pane.
-            {...(turn.role === 'assistant' && !turn.failed ? { 'data-label': 'Claude' } : {})}
+            {...(turn.role === 'assistant' && !turn.failed
+              ? { 'data-label': ASSISTANT_LABEL }
+              : {})}
           >
             {turn.text && <p className="chat-text">{turn.text}</p>}
+            {turn.truncated && (
+              <p className="chat-truncated">Cut off before it finished — ask again for the rest.</p>
+            )}
             {turn.searches && turn.searches.length > 0 && (
               <p className="chat-searched">Searched: {turn.searches.join(' · ')}</p>
             )}
@@ -149,7 +206,7 @@ export function ChatPane({
         )}
 
         {busy && (
-          <div className="chat-turn assistant" data-label="Claude">
+          <div className="chat-turn assistant" data-label={ASSISTANT_LABEL}>
             {streaming ? (
               <p className="chat-text">{streaming}</p>
             ) : (
@@ -190,6 +247,24 @@ export function ChatPane({
           submit(draft)
         }}
       >
+        <input
+          className="chat-input"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder={placeholder}
+          // Offline was previously enforced only inside the hook, so the box
+          // took a question and swallowed it. Refusing in the UI is the same
+          // rule stated where it can be seen.
+          disabled={!canAsk || busy}
+          autoComplete="off"
+          autoCorrect="off"
+          enterKeyHint="send"
+        />
+        {/* "Send", not "Ask" — the tab is already called Ask, and two controls
+            with one name is a coin flip for anything reading by label. */}
+        <button type="submit" className="chat-send" disabled={!canAsk || busy || !draft.trim()}>
+          Send
+        </button>
         {/*
           Always rendered, disabled when there is nothing to divide — never
           conditionally mounted. Popping it in and out would resize the input
@@ -209,24 +284,6 @@ export function ChatPane({
           title="New topic"
         >
           +
-        </button>
-        <input
-          className="chat-input"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={placeholder}
-          // Offline was previously enforced only inside the hook, so the box
-          // took a question and swallowed it. Refusing in the UI is the same
-          // rule stated where it can be seen.
-          disabled={!canAsk || busy}
-          autoComplete="off"
-          autoCorrect="off"
-          enterKeyHint="send"
-        />
-        {/* "Send", not "Ask" — the tab is already called Ask, and two controls
-            with one name is a coin flip for anything reading by label. */}
-        <button type="submit" className="chat-send" disabled={!canAsk || busy || !draft.trim()}>
-          Send
         </button>
       </form>
 

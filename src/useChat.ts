@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DataAdapter } from './data/adapter'
+import { isAccountProblem, isScoutError } from './data/scoutError'
 import type { DraftContext } from './domain/chatContext'
 import type { ChatMessage, ChatTurn } from './domain/types'
 
@@ -38,8 +39,17 @@ function nextId(): string {
  * button would look like it did something (the rule renders) while the model
  * kept reading straight through it.
  *
- * Exported for its tests: these three interact, and the DOM test can only
- * reach one combination at a time.
+ * Then a fourth rule cleans up after the third: the API requires the first
+ * message to be a `user` one, and the window can perfectly well cut in the
+ * middle of an exchange. Alternating turns make that look impossible, but a
+ * failure breaks the alternation — it appends *two* turns (the partial answer
+ * and the error) and drops both, while the question that caused it survives.
+ * One failure earlier in a topic is enough to make the surviving list odd, and
+ * the twelve-turn slice then opens on an answer. Every question after that
+ * point 400s until the user happens to start a new topic.
+ *
+ * Exported for its tests: these interact, and the DOM test can only reach one
+ * combination at a time.
  */
 export function sendableHistory(turns: ChatTurn[], limit = HISTORY_TURNS): ChatMessage[] {
   let start = 0
@@ -49,12 +59,18 @@ export function sendableHistory(turns: ChatTurn[], limit = HISTORY_TURNS): ChatM
       break
     }
   }
-  return turns
+  const windowed = turns
     .slice(start)
     .flatMap((t) =>
-      t.role === 'divider' || t.failed ? [] : [{ role: t.role, text: t.text }],
+      t.role === 'divider' || t.failed || !t.text.trim()
+        ? []
+        : [{ role: t.role, text: t.text }],
     )
     .slice(-limit)
+
+  // Drop a dangling answer at the head. Only ever one — what follows it is a
+  // question, or there is nothing left.
+  return windowed[0]?.role === 'assistant' ? windowed.slice(1) : windowed
 }
 
 /**
@@ -142,6 +158,8 @@ export function useChat(
       messages.push({ role: 'user', text: question })
 
       let text = ''
+      // Whether the API actually answered. Drives the spend meter below.
+      let answered = false
       try {
         const stream = adapter.chat({ messages, context: contextRef.current() })
         for await (const delta of stream) {
@@ -152,20 +170,41 @@ export function useChat(
           } else if (delta.type === 'searching') {
             setSearching(true)
           } else {
+            const answer = text.trim()
             setTurns((prev) => [
               ...prev,
-              {
-                id: nextId(),
-                role: 'assistant',
-                text: text.trim(),
-                at: Date.now(),
-                searches: delta.searches.length > 0 ? delta.searches : undefined,
-                sources: delta.sources.length > 0 ? delta.sources : undefined,
-              },
+              answer
+                ? {
+                    id: nextId(),
+                    role: 'assistant',
+                    text: answer,
+                    at: Date.now(),
+                    searches: delta.searches.length > 0 ? delta.searches : undefined,
+                    sources: delta.sources.length > 0 ? delta.sources : undefined,
+                    truncated: delta.truncated || undefined,
+                  }
+                : // A turn that produced no text at all — every token spent on
+                  // thinking, or a search that answered nothing. Recording it
+                  // as a normal answer puts an empty bubble on screen and, worse,
+                  // sends `{role:'assistant', text:''}` back next time, which the
+                  // API rejects: one silent blank would break the rest of the topic.
+                  {
+                    id: nextId(),
+                    role: 'assistant',
+                    text: 'That came back empty — ask again.',
+                    at: Date.now(),
+                    failed: true,
+                  },
             ])
+            answered = true
           }
         }
       } catch (err) {
+        // An account-level failure never reached the model, so it never cost
+        // anything — the same call that `useScout` makes, and for the same
+        // reason: this counter is labelled as money spent, and a meter that
+        // counts a rejected key as a purchase is worse than no meter.
+        answered = !(isScoutError(err) && isAccountProblem(err.kind))
         // Whatever streamed before the failure is kept: a half-answer that
         // stops is still worth more than a blank box, and the error sentence
         // says what to do next.
@@ -187,7 +226,7 @@ export function useChat(
           },
         ])
       } finally {
-        setCalls((n) => n + 1)
+        if (answered) setCalls((n) => n + 1)
         setStreaming(null)
         setSearching(false)
         busy.current = false
