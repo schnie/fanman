@@ -214,6 +214,32 @@ export default function App({
   const searchInput = useRef<HTMLInputElement>(null)
 
   /**
+   * Typing into the search box drops the position filter, for the reason the
+   * suggestion banner already drops it: you type a name because that name was
+   * just called, and the room does not nominate by position. A filtered board
+   * answers a search for someone it is hiding with an empty list, which reads
+   * as "not in this draft" rather than "not a QB" — the worst possible answer
+   * mid-nomination, and one you have to diagnose by looking away from the
+   * player and up at a chip.
+   *
+   * Only on the way *into* a search, not on every keystroke: a filter set
+   * while a search is already live was set with the search visible, so it is
+   * deliberate and the next character must not throw it away. Clearing the
+   * box and typing again is a new search, and gets the reset again.
+   *
+   * `Hide taken` stays as it is. It answers a different question — the search
+   * for a name that has already gone should keep returning nothing, because
+   * that is the true answer and the whole point of crossing players off.
+   */
+  const search = useCallback(
+    (next: string) => {
+      if (next && !query.trim()) setFilter('ALL')
+      setQuery(next)
+    },
+    [query],
+  )
+
+  /**
    * Tapping a suggestion brings that player to the top of the board rather
    * than opening a bid sheet — you still have to watch the room bid on him.
    * Clearing the position filter too, since the suggestion routinely names
@@ -333,7 +359,7 @@ export default function App({
                 className="search"
                 placeholder="Search players…"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => search(e.target.value)}
                 autoComplete="off"
                 // Names get called out of order, so this field gets used in a
                 // hurry — no autocorrect mangling half-typed surnames.

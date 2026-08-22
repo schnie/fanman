@@ -1002,6 +1002,40 @@ describe('draft board end to end', () => {
     expect(getRow('Josh Allen')).toBeInTheDocument()
     expect(queryRow('Jahmyr Gibbs')).not.toBeInTheDocument()
   })
+
+  it('drops the position filter when a search starts', async () => {
+    // A name gets typed because it was just called, and nominations don't
+    // arrive by position — so a filter left over from browsing would answer
+    // with an empty board, which reads as "not in this draft".
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    await user.click(screen.getByRole('button', { name: 'QB' }))
+    expect(queryRow('Jahmyr Gibbs')).not.toBeInTheDocument()
+
+    await user.type(screen.getByPlaceholderText('Search players…'), 'Gibbs')
+    expect(screen.getByRole('button', { name: 'ALL' })).toHaveClass('on')
+    expect(getRow('Jahmyr Gibbs')).toBeInTheDocument()
+  })
+
+  it('keeps a filter picked while the search is already live', async () => {
+    // Only the transition into a search resets it. A chip tapped with the
+    // search box already full was tapped in full view of the search, so the
+    // next keystroke must not undo it.
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    const search = screen.getByPlaceholderText('Search players…')
+    await user.type(search, 'a')
+    await user.click(screen.getByRole('button', { name: 'QB' }))
+    await user.type(search, 'l')
+
+    expect(screen.getByRole('button', { name: 'QB' })).toHaveClass('on')
+    expect(getRow('Josh Allen')).toBeInTheDocument()
+    expect(queryRow('Puka Nacua')).not.toBeInTheDocument()
+  })
 })
 
 describe('the draft log', () => {
