@@ -64,12 +64,14 @@ export default defineConfig(({ command }) => ({
       },
       workbox: {
         /*
-         * Both are normally implied by `autoUpdate`, but only while
-         * `injectRegister` is left at its default — and it isn't, above. State
-         * them, because the entire update story rests on them and the coupling
-         * is invisible from here: without `skipWaiting` a new build sits in the
-         * waiting state until every tab closes, which on a home-screen app that
-         * is only ever suspended is close to never.
+         * The plugin sets both itself for `autoUpdate`, but only while
+         * `injectRegister` is `'auto'` or `null` — which is what it is above,
+         * so today these two lines change nothing. They are here because the
+         * entire update story rests on them and that dependency is invisible:
+         * setting `injectRegister` to `'script'` or `'inline'` would silently
+         * drop `skipWaiting`, and a new build would then sit in the waiting
+         * state until every tab closes — on a home-screen app that is only ever
+         * suspended, close to never.
          */
         skipWaiting: true,
         clientsClaim: true,

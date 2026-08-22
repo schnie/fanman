@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createAppUpdates, type Registrar } from './appUpdate'
+import { createAppUpdates, reinstall, type Registrar } from './appUpdate'
 
 /**
  * A stand-in for `ServiceWorkerRegistration`. Only three members matter to
@@ -8,13 +8,23 @@ import { createAppUpdates, type Registrar } from './appUpdate'
  * worker shows up in afterwards.
  */
 function fakeRegistration(
-  after: { installing?: boolean; waiting?: boolean; rejects?: boolean } = {},
+  after: {
+    installing?: boolean
+    waiting?: boolean
+    rejects?: boolean
+    /** Announce a new worker and then finish activating it inside `update()`. */
+    activatesDuringCheck?: boolean
+  } = {},
 ) {
+  const listeners = new Set<() => void>()
   const registration = {
     installing: null as unknown,
     waiting: null as unknown,
+    addEventListener: (_type: string, fn: () => void) => void listeners.add(fn),
+    removeEventListener: (_type: string, fn: () => void) => void listeners.delete(fn),
     update: vi.fn(async () => {
       if (after.rejects) throw new Error('offline')
+      if (after.activatesDuringCheck) listeners.forEach((fn) => fn())
       if (after.installing) registration.installing = {}
       if (after.waiting) registration.waiting = {}
     }),
@@ -75,6 +85,41 @@ describe('checking for a new build', () => {
     expect(await updates.check()).toBe('unsupported')
   })
 
+  /**
+   * The window `installing`/`waiting` cannot see: skipWaiting lets a new worker
+   * be found, install and activate entirely inside the `update()` call, leaving
+   * both slots empty. Saying "you're on the latest build" here would be a lie
+   * the page disproves a second later by reloading.
+   */
+  it('reports an update for a worker that activated during the check', async () => {
+    const updates = createAppUpdates(from(fakeRegistration({ activatesDuringCheck: true })), 'test')
+
+    expect(await updates.check()).toBe('updating')
+  })
+
+  /**
+   * Registration is not guaranteed to settle — `npm run dev` supplies a
+   * `registerSW` stub that calls neither callback. Without a timeout the first
+   * check awaits forever and the button sticks on "Checking…" with no retry.
+   */
+  it('gives up on a registration that never arrives instead of hanging', async () => {
+    vi.useFakeTimers()
+    const updates = createAppUpdates(() => new Promise(() => {}), 'test')
+
+    const result = updates.check()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(await result).toBe('unsupported')
+  })
+
+  it('treats a registration that fails outright as nothing to update', async () => {
+    const updates = createAppUpdates(async () => {
+      throw new Error('chunk failed to load')
+    }, 'test')
+
+    expect(await updates.check()).toBe('unsupported')
+  })
+
   it('carries the build stamp through for Settings to show', () => {
     expect(createAppUpdates(from(undefined), 'abc1234 · 2026-08-22 10:00Z').version).toBe(
       'abc1234 · 2026-08-22 10:00Z',
@@ -104,19 +149,23 @@ describe('checking when the app wakes up', () => {
   })
 
   /**
-   * A single resume can fire `pageshow` and `visibilitychange` together. They
-   * are one wake-up and deserve one request, not one each.
+   * A single resume can fire `pageshow` and `visibilitychange` together, in the
+   * same task, on an instance that has never checked before. They are one
+   * wake-up and deserve one request.
+   *
+   * This originally fired the burst *after* an awaited first check, so the
+   * throttle stamp was already written and the test passed while the real
+   * scenario asked twice — the stamp was being set after `await ready`, which
+   * no handler in the burst had reached yet.
    */
-  it('treats a burst of wake-up events as a single check', async () => {
+  it('treats the very first burst of wake-up events as a single check', async () => {
     const registration = fakeRegistration()
     createAppUpdates(from(registration), 'test')
 
     wake()
-    await vi.waitFor(() => expect(registration.update).toHaveBeenCalledTimes(1))
-
-    wake()
     document.dispatchEvent(new Event('visibilitychange'))
-    await Promise.resolve()
+
+    await vi.waitFor(() => expect(registration.update).toHaveBeenCalledTimes(1))
     expect(registration.update).toHaveBeenCalledTimes(1)
   })
 
@@ -159,5 +208,71 @@ describe('checking when the app wakes up', () => {
 
     expect(await updates.check()).toBe('current')
     expect(registration.update).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('reinstalling the app files', () => {
+  /** Stands in for the worker and cache APIs, neither of which jsdom has. */
+  function stubStorage({ throws = false } = {}) {
+    const unregister = vi.fn(async () => true)
+    const remove = vi.fn(async () => true)
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        getRegistrations: async () => {
+          if (throws) throw new Error('storage blocked')
+          return [{ unregister }]
+        },
+      },
+      configurable: true,
+    })
+    Object.defineProperty(globalThis, 'caches', {
+      value: { keys: async () => ['shell', 'espn-images'], delete: remove },
+      configurable: true,
+    })
+    return { unregister, remove }
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'serviceWorker')
+    Reflect.deleteProperty(globalThis, 'caches')
+  })
+
+  it('drops the worker and every cache, then reloads', async () => {
+    const { unregister, remove } = stubStorage()
+    const reload = vi.fn()
+
+    await reinstall(reload)
+
+    expect(unregister).toHaveBeenCalledTimes(1)
+    expect(remove).toHaveBeenCalledWith('shell')
+    expect(remove).toHaveBeenCalledWith('espn-images')
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  /**
+   * The draft, the settings and the API key all live in localStorage. Taking
+   * them out is exactly what deleting the home-screen icon does, and the whole
+   * reason this button exists is to be the version that doesn't.
+   */
+  it('leaves localStorage — and so the draft — completely alone', async () => {
+    stubStorage()
+    localStorage.setItem('fanman:draft', '{"picks":[1,2,3]}')
+
+    await reinstall(vi.fn())
+
+    expect(localStorage.getItem('fanman:draft')).toBe('{"picks":[1,2,3]}')
+  })
+
+  /**
+   * Safari private browsing throws from these APIs. Swallowing that left the
+   * confirm panel open with nothing whatsoever appearing to happen, which after
+   * a destructive confirmation reads as a broken app.
+   */
+  it('still reloads when clearing throws, rather than failing silently', async () => {
+    stubStorage({ throws: true })
+    const reload = vi.fn()
+
+    await expect(reinstall(reload)).rejects.toThrow('storage blocked')
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })

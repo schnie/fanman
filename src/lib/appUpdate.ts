@@ -53,17 +53,60 @@ const CHECK_THROTTLE_MS = 30_000
 /** Backstop for an app left open on the arm of the couch all afternoon. */
 const POLL_MS = 15 * 60 * 1000
 
+/**
+ * How long we wait for a registration before deciding there isn't one.
+ *
+ * Registration is not guaranteed to settle. `npm run dev` gets a stub for
+ * `registerSW` that calls neither callback; a chunk that fails to load calls
+ * neither either. Without this the first check awaits a promise that never
+ * resolves, which shows up as a button stuck on "Checking…" with no way back —
+ * and, because the throttle stamp is written by the check, every later wake-up
+ * starting another one behind it.
+ */
+const REGISTER_TIMEOUT_MS = 10_000
+
 export function createAppUpdates(
   registrar: Registrar = registerViaPlugin,
   version: string = __APP_BUILD__,
 ): AppUpdates {
-  const ready = registrar()
+  /*
+   * Guarded here rather than inside the default registrar so the guarantee
+   * belongs to the seam: whatever a registrar does, `ready` settles, and a
+   * registration we never got reports `unsupported` rather than hanging.
+   */
+  const ready: Promise<ServiceWorkerRegistration | undefined> = Promise.race([
+    registrar().catch(() => undefined),
+    new Promise<undefined>((resolve) => {
+      window.setTimeout(() => resolve(undefined), REGISTER_TIMEOUT_MS)
+    }),
+  ])
   let lastCheck = 0
 
   const check = async (): Promise<UpdateCheck> => {
+    /*
+     * Stamped synchronously, before the first `await`. An iOS resume fires
+     * `pageshow` and `visibilitychange` in the same task, so if this waited for
+     * the registration first, both handlers would read a stale `lastCheck`,
+     * sail past the throttle and ask twice — the burst this module exists to
+     * collapse.
+     */
+    lastCheck = Date.now()
     const registration = await ready
     if (!registration) return 'unsupported'
-    lastCheck = Date.now()
+
+    /*
+     * `installing`/`waiting` alone miss a real window: with `skipWaiting` the
+     * new worker can be found, install and activate inside the `update()` call,
+     * leaving both slots null. Reporting "you're on the latest build" moments
+     * before the page reloads itself is the one answer that makes the button
+     * look broken. `updatefound` fires the moment a new worker appears, so it
+     * catches that window regardless of how far along it got.
+     */
+    let found = false
+    const noteFound = () => {
+      found = true
+    }
+    registration.addEventListener('updatefound', noteFound)
     try {
       await registration.update()
     } catch {
@@ -71,12 +114,10 @@ export function createAppUpdates(
       // know, and guessing "current" here is how you end up trusting a stale
       // build because a button told you to.
       return 'failed'
+    } finally {
+      registration.removeEventListener('updatefound', noteFound)
     }
-    // `update()` resolves once the check has completed. A newer worker shows up
-    // as one installing, or one already waiting from an earlier check. Either
-    // way autoUpdate is about to claim the page and reload it out from under
-    // us, so the caller's job is only to say so.
-    return registration.installing || registration.waiting ? 'updating' : 'current'
+    return found || registration.installing || registration.waiting ? 'updating' : 'current'
   }
 
   const checkOnWake = () => {
@@ -108,25 +149,41 @@ export function createAppUpdates(
  * settings and the API key all live there, and taking them out is precisely
  * what makes the re-add-the-icon workaround unusable mid-draft.
  */
-export async function reinstall(): Promise<void> {
-  if ('serviceWorker' in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations()
-    await Promise.all(registrations.map((r) => r.unregister()))
+export async function reinstall(reload: () => void = defaultReload): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((r) => r.unregister()))
+    }
+    if ('caches' in globalThis) {
+      // Takes the headshot cache with it. Those are free to refetch, and this is
+      // the button you press when you have stopped trusting anything on the
+      // device.
+      const keys = await caches.keys()
+      await Promise.all(keys.map((key) => caches.delete(key)))
+    }
+  } finally {
+    /*
+     * In the `finally` because the storage APIs above can throw — Safari
+     * private browsing, storage blocked — and swallowing that left the confirm
+     * panel sitting open with nothing whatsoever having appeared to happen. A
+     * reload after a partial clear is harmless; silence after a destructive
+     * confirmation is not.
+     */
+    reload()
   }
-  if ('caches' in globalThis) {
-    // Takes the headshot cache with it. Those are free to refetch, and this is
-    // the button you press when you have stopped trusting anything on the
-    // device.
-    const keys = await caches.keys()
-    await Promise.all(keys.map((key) => caches.delete(key)))
-  }
-  window.location.reload()
 }
+
+/** Separated only so tests can drive `reinstall` without navigating jsdom. */
+const defaultReload = () => window.location.reload()
 
 /**
  * Imported lazily rather than at module scope so this file can be loaded — and
- * tested — without vite-plugin-pwa's virtual module existing. Exactly one of
- * the two callbacks always fires, including when workbox itself fails to load.
+ * tested — without vite-plugin-pwa's virtual module existing.
+ *
+ * Neither callback is guaranteed to fire: the dev build's `registerSW` is a
+ * stub that calls nothing at all. The timeout in `createAppUpdates` is what
+ * makes that survivable, so resist "simplifying" it away.
  */
 const registerViaPlugin: Registrar = async () => {
   if (!('serviceWorker' in navigator)) return undefined

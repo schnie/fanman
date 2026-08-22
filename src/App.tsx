@@ -389,6 +389,7 @@ export default function App({
           scoutCalls={scout.calls}
           onKeyChange={scout.refreshKey}
           updates={updates}
+          online={online}
         />
       )}
 

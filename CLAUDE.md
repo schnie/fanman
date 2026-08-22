@@ -84,9 +84,11 @@ doesn't reliably. So `lib/appUpdate.ts` runs `registration.update()` itself on
 foreground, on a slow timer, and from a button in Settings; the event that
 actually fires on an iOS resume is `pageshow`, not `load`. A check that fails
 reports `failed`, never `current` — same reasoning as the visible rankings
-timestamp. Because we register the worker, `injectRegister` is `null` and
-`skipWaiting`/`clientsClaim` are stated explicitly: `autoUpdate` only implies
-them while `injectRegister` is at its default, and nothing in the config says so.
+timestamp. Because we register the worker, `injectRegister` is `null`, and
+`skipWaiting`/`clientsClaim` are restated explicitly — redundantly today, since
+the plugin sets them for `injectRegister` of `'auto'` *or* `null`, but the whole
+update story rests on them and switching to `'script'`/`'inline'` would drop
+them silently.
 
 **The update seam is a prop, not the adapter.** `DataAdapter` is about data;
 which build is installed is about the shell. `main.tsx` builds `AppUpdates` and
