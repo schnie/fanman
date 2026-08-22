@@ -26,7 +26,8 @@ npm run test:chat    # three real, billed chat turns (needs ANTHROPIC_API_KEY)
 src/
   domain/       types + budget math (pure, no I/O, heavily tested)
   data/         DataAdapter interface, ESPN client, browser implementation
-  components/   BudgetBar, NextMove, PlayerRow, BidSheet, Roster, ChatPane, SettingsPane
+  components/   BudgetBar, NextMove, PlayerRow, BidSheet, Roster, DraftLog, ChatPane,
+                SettingsPane
   useDraft.ts   draft state, persistence, rankings fetch/cache
   App.tsx       composition + navigation
 ```
@@ -101,6 +102,38 @@ height (no board yet, or a full roster the budget bar already announces), so
 the banner never has to decide that for itself. Unpriced players
 (head coaches) are never suggested, because the banner would have to quote a
 number ESPN never published.
+
+## The draft log
+
+A **Log** tab: every player crossed off, in the order they went, most recent
+first, with what they sold for where a price was caught. It changes nothing and
+costs nothing — a read-only view of the same append-only log the budget math
+already runs on.
+
+It exists because the board is a list of who is *left*, and that is the wrong
+shape for the two questions that come up between nominations — *did so-and-so
+go already?* and *what did the last few actually sell for?* Both are usually
+asked by whoever you just handed the phone to, which is why the tab sits after
+the three you drive the draft with rather than among them.
+
+Most recent first, because that is the end both questions live at and a phone
+opens at the top; read the other way round the useful rows would be a hundred
+deep by the middle rounds. The pick number restores the running order the
+reversal takes away, so nobody has to count backwards to say "he went 14th".
+
+Two things `src/domain/draftLog.ts` gets right that a map over the log would
+not. Recording a sale price after the fact **appends** rather than edits — that
+is what keeps undo a pop — so entries are collapsed per player: the first
+mention fixes where they sit in the order, the last one supplies the price.
+Ordering by the correction instead would teleport a player twenty picks forward
+for having their price filled in late. And a player the current board cannot
+name still gets their row and their number (`Player 4211`), because a draft
+outlives any particular board — rankings that failed to come back, or a scoring
+switch, would otherwise punch a hole in the sequence.
+
+A price nobody caught shows as `—`. The board is full of estimates and says so;
+a log is a record of what happened, and an estimate inside a record reads as a
+fact.
 
 ## Data
 
@@ -427,6 +460,6 @@ Working: board, search, position and FLEX filters, cross-off, win-with-bid,
 budget math, undo, positional roster with bench divider, bye weeks on both
 tabs with position-scoped coverage flags, head coaches with FPI-derived values,
 settings, persistence, offline fallback, the scout, player profiles, the Ask
-tab, and a GitHub Pages deploy.
+tab, the draft log, and a GitHub Pages deploy.
 
 Next: rehearse a full mock draft on the phone.

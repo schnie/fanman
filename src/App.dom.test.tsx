@@ -1004,6 +1004,129 @@ describe('draft board end to end', () => {
   })
 })
 
+describe('the draft log', () => {
+  /**
+   * Rows scoped to the log list, for the reason `board()` exists: a player's
+   * name is now in the DOM on several panels at once, and the roster's copy of
+   * it is merely hidden rather than absent.
+   */
+  function logRows(): HTMLElement[] {
+    return [...document.querySelectorAll('.log-row')] as HTMLElement[]
+  }
+  async function openLog(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+  }
+
+  it('says nothing has happened before the first pick', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+    await openLog(user)
+
+    expect(screen.getByText(/Nothing off the board yet/)).toBeInTheDocument()
+    expect(logRows()).toHaveLength(0)
+  })
+
+  it('lists every pick most recent first, numbered in draft order', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    await crossOff(user, 'Jahmyr Gibbs', 61)
+    await win(user, 'Puka Nacua', 40)
+    await crossOff(user, 'Josh Allen')
+    await openLog(user)
+
+    const rows = logRows()
+    expect(rows).toHaveLength(3)
+    expect(within(rows[0]).getByText('Josh Allen')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Puka Nacua')).toBeInTheDocument()
+    expect(within(rows[2]).getByText('Jahmyr Gibbs')).toBeInTheDocument()
+    expect(rows.map((r) => within(r).getByText(/^\d+$/).textContent)).toEqual(['3', '2', '1'])
+  })
+
+  it('shows a price only where one was recorded, and marks what we won', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    await crossOff(user, 'Jahmyr Gibbs', 61)
+    await win(user, 'Puka Nacua', 40)
+    await crossOff(user, 'Josh Allen') // skipped the keypad
+    await openLog(user)
+
+    const [allen, nacua, gibbs] = logRows()
+    expect(within(allen).getByText('—')).toBeInTheDocument()
+    expect(within(nacua).getByText('$40')).toBeInTheDocument()
+    expect(within(nacua).getByText('Mine')).toBeInTheDocument()
+    expect(nacua.className).toContain('mine')
+    expect(within(gibbs).getByText('$61')).toBeInTheDocument()
+    expect(within(gibbs).queryByText('Mine')).not.toBeInTheDocument()
+  })
+
+  it('holds a player in place when their price is recorded later', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    await crossOff(user, 'Jahmyr Gibbs') // no price caught at the time
+    await crossOff(user, 'Josh Allen', 12)
+
+    // Go back and fill Gibbs' price in. That appends to the append-only log,
+    // so the log has two entries for him — and he must stay pick 1.
+    await user.click(screen.getByRole('button', { name: 'Hide taken' }))
+    await openRow(user, 'Jahmyr Gibbs')
+    await user.click(screen.getByRole('button', { name: 'Record what they sold for' }))
+    for (const d of '55') await user.click(screen.getByRole('button', { name: d }))
+    await user.click(screen.getByRole('button', { name: 'Sold for $55' }))
+
+    await openLog(user)
+    const rows = logRows()
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('Josh Allen')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('Jahmyr Gibbs')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('1')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('$55')).toBeInTheDocument()
+  })
+
+  it('drops a pick from the log when it is undone', async () => {
+    const user = userEvent.setup()
+    render(<App adapter={new FakeAdapter()} />)
+    await findRow('Jahmyr Gibbs')
+
+    await crossOff(user, 'Jahmyr Gibbs', 61)
+    await win(user, 'Puka Nacua', 40)
+    await user.click(screen.getByRole('button', { name: 'Undo last action' }))
+    await openLog(user)
+
+    const rows = logRows()
+    expect(rows).toHaveLength(1)
+    expect(within(rows[0]).getByText('Jahmyr Gibbs')).toBeInTheDocument()
+  })
+
+  it('numbers a pick it cannot name rather than leaving a gap', async () => {
+    const user = userEvent.setup()
+    const adapter = new FakeAdapter()
+    // A draft restored beside a board that no longer carries the player — a
+    // scoring switch, or rankings that failed to come back.
+    adapter.draft = {
+      settings: DEFAULT_SETTINGS,
+      log: [
+        { playerId: 404, status: 'gone', price: 7, at: 1 },
+        { playerId: 1, status: 'gone', price: 61, at: 2 },
+      ],
+    }
+    render(<App adapter={adapter} />)
+    await findRow('Puka Nacua')
+    await openLog(user)
+
+    const rows = logRows()
+    expect(rows).toHaveLength(2)
+    expect(within(rows[1]).getByText('Player 404')).toBeInTheDocument()
+    expect(within(rows[1]).getByText('$7')).toBeInTheDocument()
+  })
+})
+
 describe('player profiles', () => {
   /** A board with a D/ST and a head coach alongside the athletes. */
   class ProfileAdapter extends FakeAdapter {
