@@ -3,6 +3,7 @@ import type { DataAdapter, CachedRankings } from './data/adapter'
 import { picksByPlayer, summarize } from './domain/budget'
 import {
   emptyDraft,
+  migrateSettings,
   type DraftState,
   type Pick,
   type Player,
@@ -17,7 +18,7 @@ export function useDraft(adapter: DataAdapter) {
   // draft already in progress.
   useEffect(() => {
     adapter.loadDraft().then((saved) => {
-      if (saved) setState(saved)
+      if (saved) setState(migrateSettings(saved))
       setLoaded(true)
     })
   }, [adapter])

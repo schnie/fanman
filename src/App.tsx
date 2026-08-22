@@ -389,6 +389,7 @@ export default function App({
               // the room's remaining money honest. Skippable in one tap.
               onPrice={openSold}
               room={displayRoomPrice(p, market.inflation)}
+              scoring={draft.state.settings.scoring}
               // Scoped to the player's own position: receivers on bye say
               // nothing about the quarterback you're bidding on. Our own bye
               // never clashes with itself, so a player we already own is

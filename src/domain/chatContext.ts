@@ -88,7 +88,14 @@ export function buildReference(input: ChatContextInput): string {
     // Spelled out because it is the single most consequential thing about this
     // league and the label does not say it. A model that reads "OP" as a
     // normal FLEX will under-rate every quarterback on the board.
-    `The OP slot accepts ${OP_POSITIONS.join('/')} — including QB, which makes this a SUPERFLEX league. Two quarterbacks can start. ESPN's ranks and values assume a one-QB league, so they systematically under-price QBs here. Say so when it matters.`,
+    `The OP slot accepts ${OP_POSITIONS.join('/')} — including QB, which makes this a SUPERFLEX league. Two quarterbacks can start.`,
+    // The two columns no longer come from the same book, and the model is the
+    // one consumer that reads them side by side on every row. Left unsaid it
+    // would report the gap as the room being cool on quarterbacks, which is
+    // the one thing it certainly is not evidence of.
+    settings.scoring === 'SUPERFLEX'
+      ? "The `espn` column is ESPN's SUPERFLEX book, so it already prices two starting QBs. The `market` column is not: ESPN publishes one auction average across all its leagues, nearly all one-QB, and has no superflex version. So `market` runs below `espn` on quarterbacks by design. That gap is a difference of format, not a bargain — never read it as the room being cool on a QB, and say which of the two you are quoting."
+      : "ESPN's ranks and values here assume a one-QB league, so they systematically under-price QBs in this lineup. Say so when it matters.",
     '',
     '# Board',
     'Every player ESPN lists, ranked. Columns:',

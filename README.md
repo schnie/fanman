@@ -107,8 +107,28 @@ number ESPN never published.
 Public ESPN endpoint, no auth, no proxy — it reflects `Origin` and permits the
 `x-fantasy-filter` header, so the browser calls it directly. Per player we take
 ESPN's own auction value alongside `ownership.auctionValueAverage`, the live
-average across real drafts. The **gap between them is the useful signal**: it
-shows where the market is paying over or under book.
+average across real drafts.
+
+### Which rank book
+
+ESPN publishes several draft-rank books on the same payload, and this league is
+**superflex** — the OP slot takes a quarterback, so two can start. That is the
+book Fanman asks for, and it is a different board rather than a tweak to one:
+Josh Allen is rank 36 at $22 under PPR and **rank 1 at $59** under superflex.
+The top six are all quarterbacks. Settings can switch it, but superflex is the
+default because it is the league we actually draft in.
+
+One column does *not* follow: `ownership.auctionValueAverage` is a single
+average across all of ESPN's leagues, nearly all one-QB, and there is no
+superflex version of it to fetch. So the market figure reads low here, hardest
+at QB. It is still shown — it is real data about real drafts — with the caveat
+spelled out on the bid sheet, where the number turns into a bid.
+
+Because the two are quoted in different formats, the book-versus-market gap
+**is not computed under superflex**. Under a one-QB book that gap is the useful
+signal, showing where the market is paying over or under book; under superflex
+it would only measure the distance between two rulebooks, and would report
+every quarterback as a bargain.
 
 Rankings are cached on-device with a timestamp and refreshed on open. A failed
 refresh never empties the board — it keeps the cached data and surfaces the

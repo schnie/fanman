@@ -1,5 +1,13 @@
 import { memo } from 'react'
-import { isUnpriced, marketPremium, marketTrend, observedPrice, type Pick, type Player } from '../domain/types'
+import {
+  isUnpriced,
+  marketPremium,
+  marketTrend,
+  observedPrice,
+  type Pick,
+  type Player,
+  type Scoring,
+} from '../domain/types'
 import { posClass } from '../lib/format'
 import { isTeamEntity, teamAbbr } from '../data/proTeams'
 import { ByeChip } from './ByeChip'
@@ -33,6 +41,12 @@ export interface PlayerRowProps {
    * rows, while this dollar figure is unchanged for most of them.
    */
   room?: number
+  /**
+   * Which rank book the board was fetched under. The row needs it only to know
+   * whether the book-vs-market premium is a real number here — see
+   * `marketIsComparable`. Stable for the life of a draft, so `memo` is safe.
+   */
+  scoring: Scoring
   /**
    * How many players we *already own at this position* share this player's
    * bye week — the cost of adding one more, not a property of the player.
@@ -72,6 +86,7 @@ export const PlayerRow = memo(function PlayerRow({
   onScout,
   onPrice,
   room,
+  scoring,
   byeClash,
   scout,
   scouting,
@@ -156,7 +171,7 @@ export const PlayerRow = memo(function PlayerRow({
         </span>
 
         <span className="row-values">
-          <PlayerValue player={player} room={room} />
+          <PlayerValue player={player} room={room} scoring={scoring} />
         </span>
       </button>
 
@@ -228,14 +243,25 @@ export const PlayerRow = memo(function PlayerRow({
 })
 
 /** The value column, in priority order: ESPN's price, our estimate, or nothing. */
-function PlayerValue({ player, room }: { player: Player; room?: number }) {
+function PlayerValue({ player, room, scoring }: { player: Player; room?: number; scoring: Scoring }) {
   if (!isUnpriced(player)) {
-    const premium = marketPremium(player)
+    const premium = marketPremium(player, scoring)
     const trend = marketTrend(player)
     return (
       <>
         <span className="val-espn">${player.espnValue}</span>
-        <span className="val-market">
+        {/* The row is 230 of these, so the caveat rides as a title rather than
+            as visible text — the bid sheet is where it is spelled out, because
+            that is the screen where the number becomes a bid and the one a
+            phone actually reaches. */}
+        <span
+          className="val-market"
+          title={
+            premium === undefined
+              ? "ESPN's market average is one figure across all leagues, nearly all one-QB. It is not a superflex price, so it runs low here."
+              : undefined
+          }
+        >
           ${player.marketValue}
           {trend && (
             <span
@@ -247,7 +273,7 @@ function PlayerValue({ player, room }: { player: Player; room?: number }) {
               {trend === 'up' ? '▲' : '▼'}
             </span>
           )}
-          {premium !== 0 && (
+          {premium !== undefined && premium !== 0 && (
             <span className={premium > 0 ? 'prem up' : 'prem down'}>
               {premium > 0 ? '+' : ''}{premium}
             </span>

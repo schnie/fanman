@@ -106,7 +106,10 @@ function explain({ reason, pick, rivalMaxBid, maxBid }: MoveAdvice): string {
       // "You don't need him" is only true once a slot has actually been
       // filled. At the opening nomination every position is still open, so the
       // case has to be made on the overpay and the cushion instead.
-      const over = Math.round(pick.premium)
+      // Undefined under SUPERFLEX, where there is no comparable book-vs-market
+      // gap to quote. It falls through to the same wording the opening
+      // nomination already uses, so the branch is proven rather than new.
+      const over = pick.premium === undefined ? 0 : Math.round(pick.premium)
       const lead =
         over >= 1
           ? `The room is paying $${over} over book here. Let someone else spend it.`

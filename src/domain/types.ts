@@ -38,7 +38,18 @@ export function marketTrend(p: Player): 'up' | 'down' | null {
   return p.marketChange > 0 ? 'up' : 'down'
 }
 
-export type Scoring = 'PPR' | 'STANDARD'
+/**
+ * Which of ESPN's draft-rank books to read.
+ *
+ * ESPN publishes four on the same payload; these are the three that price a
+ * full season (`ELIMINATION` is a survivor format and prices nothing we run).
+ * `SUPERFLEX` is the one that matches this league — see `STARTER_SLOTS`, whose
+ * OP slot takes a quarterback — and it is a different board, not a tweak to
+ * one: Josh Allen is rank 36 at $22 under PPR and rank 1 at $59 under
+ * SUPERFLEX. Reading the wrong book here is how the app spent a year
+ * under-pricing every quarterback by a factor of five.
+ */
+export type Scoring = 'PPR' | 'STANDARD' | 'SUPERFLEX'
 
 export interface Player {
   id: number
@@ -88,10 +99,35 @@ export interface TeamStrength {
 }
 
 /**
+ * True when `espnValue` and `marketValue` are quoted in the same league format,
+ * and so can be subtracted from one another.
+ *
+ * They can't be under SUPERFLEX. `espnValue` follows the rank book we asked
+ * for, but `marketValue` is `ownership.auctionValueAverage` — one global
+ * average across every ESPN league, overwhelmingly one-QB ones, with no
+ * superflex variant published anywhere on the payload. The two therefore
+ * describe different games: Josh Allen books at $59 and averages $31.3.
+ *
+ * The gap is widest at QB but it is not a QB problem — the whole board shifts,
+ * because a format that starts two quarterbacks moves money onto them and off
+ * everyone else (Jonathan Taylor: $52 PPR, $44 SUPERFLEX). So this is a
+ * property of the *format*, not of the player.
+ */
+export function marketIsComparable(scoring: Scoring): boolean {
+  return scoring !== 'SUPERFLEX'
+}
+
+/**
  * Positive means the room is paying over ESPN's book value — a player being
  * bid up. Negative means the market is cooler than the book: a possible bargain.
+ *
+ * Undefined when the two sides aren't quoted in the same format — see
+ * `marketIsComparable`. Deliberately absent rather than zero: zero is a real
+ * reading that means "priced at book", and the callers that sort on this need
+ * to be able to tell "no premium" from "no signal".
  */
-export function marketPremium(p: Player): number {
+export function marketPremium(p: Player, scoring: Scoring): number | undefined {
+  if (!marketIsComparable(scoring)) return undefined
   return Math.round((p.marketValue - p.espnValue) * 10) / 10
 }
 
@@ -140,11 +176,31 @@ export const DEFAULT_SETTINGS: Settings = {
   // The ten starting slots in `STARTER_SLOTS` — including this league's extra
   // head-coach slot — plus five on the bench.
   slots: 15,
-  scoring: 'STANDARD',
+  scoring: 'SUPERFLEX',
   teamCount: 12,
   // Five is roughly what turns over between nominations, so a verdict is
   // usually waiting without paying for a queue the draft never reaches.
   prewarmDepth: 5,
+}
+
+/**
+ * Corrects a draft restored from storage.
+ *
+ * The app shipped for a season reading ESPN's one-QB rank book while starting
+ * two quarterbacks, so every returning phone has `STANDARD` written into its
+ * saved draft and would keep it — a changed `DEFAULT_SETTINGS` only reaches a
+ * device that has never stored anything.
+ *
+ * Only before the draft opens. Switching the book invalidates the cached
+ * board (the rankings cache is keyed on scoring), so the next paint has
+ * nothing to show until a refetch lands — and the whole reason this app exists
+ * is that draft-day wifi is not something to bet the board on. Mid-draft the
+ * fix is the Settings menu, where the user chooses the moment.
+ */
+export function migrateSettings(state: DraftState): DraftState {
+  if (state.log.length > 0) return state
+  if (state.settings.scoring === 'SUPERFLEX') return state
+  return { ...state, settings: { ...state.settings, scoring: 'SUPERFLEX' } }
 }
 
 /**
