@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { DEFAULT_SETTINGS, type Scoring, type Settings } from '../domain/types'
 import type { DataAdapter } from '../data/adapter'
 import type { AppUpdates, UpdateCheck } from '../lib/appUpdate'
-import { describeAge } from '../lib/format'
+import { describeAge, formatBuildTime } from '../lib/format'
 
 /**
  * A password manager treats any `type="password"` holding a saved value as a
@@ -215,6 +215,7 @@ const CHECK_NOTE: Record<CheckState, string> = {
 function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean }) {
   const [state, setState] = useState<CheckState>('idle')
   const [reinstall, setReinstall] = useState<ReinstallState>('idle')
+  const builtAt = formatBuildTime(updates.builtAt)
 
   const check = async () => {
     setState('checking')
@@ -246,7 +247,8 @@ function AppVersion({ updates, online }: { updates: AppUpdates; online: boolean 
     <>
       <h3 className="pane-heading">App version</h3>
       <div className="field-note">
-        Running build <strong>{updates.version}</strong>.
+        Running build <strong>{updates.version}</strong>
+        {builtAt ? `, built ${builtAt}.` : '.'}
       </div>
       <button className="wide" onClick={check} disabled={busy}>
         {state === 'checking' ? 'Checking…' : 'Check for update'}
