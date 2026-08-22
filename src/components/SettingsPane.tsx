@@ -301,7 +301,7 @@ function reinstallNote(online: boolean, state: ReinstallState): string {
   if (!online) {
     return 'Needs a connection — this downloads the app again.'
   }
-  return 'Downloads the app fresh when a check keeps saying you are current. Your draft is kept.'
+  return 'Forces a fresh download of the app. Your draft is kept.'
 }
 
 /**
