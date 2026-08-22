@@ -165,15 +165,22 @@ export function ChatPane({
         </button>
       </form>
 
-      {/* Same reasoning as the scout's spend dial: a call that costs money says
-          so where the button is, not in a settings screen nobody opens
-          mid-draft. */}
+      {/*
+        Status and spend, not a disclaimer. The attribution used to live here
+        too and doesn't need to: every answer is labelled where it is read,
+        and that label scrolls with the transcript while a standing note under
+        the input is off screen for all but the last turn.
+
+        The call count stays for the same reason the scout's does — a control
+        that spends money says so where the button is, not in a settings
+        screen nobody opens mid-draft.
+      */}
       <p className="chat-note">
         {!online
           ? 'Offline — questions need the network.'
           : !hasKey
             ? 'Add a Claude API key in Settings to ask questions.'
-            : `Answers are Claude's, not ESPN's — check anything load-bearing. ${calls} question${calls === 1 ? '' : 's'} asked this draft, each a paid API call.`}
+            : `${calls} question${calls === 1 ? '' : 's'} asked this draft, each a paid API call.`}
       </p>
     </div>
   )

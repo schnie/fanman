@@ -1714,6 +1714,50 @@ describe('ask', () => {
     expect(sent[0].messages.at(-1)).toEqual({ role: 'user', text: 'Now what?' })
   })
 
+  /**
+   * The state is a snapshot taken when a question is sent, not when the
+   * conversation started — so a follow-up asked after a pick reasons about the
+   * roster and the ceiling as they are now, not as they were.
+   */
+  it('re-reads the draft for every question, not once per conversation', async () => {
+    const adapter = new FakeAdapter()
+    adapter.apiKey = 'sk-ant-test'
+    const sent: ChatRequest[] = []
+    adapter.chat = function (req: ChatRequest) {
+      sent.push(req)
+      return answer('Noted.')()
+    }
+
+    const user = await openAsk(adapter)
+    await ask(user, 'Where am I?')
+    await waitFor(() => expect(sent).toHaveLength(1))
+
+    // Win a player between the two questions.
+    await user.click(screen.getByRole('button', { name: 'Board' }))
+    await win(user, 'Jahmyr Gibbs', 40)
+    await user.click(screen.getByRole('button', { name: 'Ask' }))
+    await ask(user, 'And now?')
+    await waitFor(() => expect(sent).toHaveLength(2))
+
+    // Opening position, then the same numbers moved by the win.
+    expect(sent[0].context.live).toContain('Max bid right now: $186')
+    expect(sent[0].context.live).toContain('0 of 15 spots filled')
+    expect(sent[1].context.live).toContain('Max bid right now: $147')
+    expect(sent[1].context.live).toContain('1 of 15 spots filled')
+    expect(sent[1].context.live).toContain('Won by us (1): Jahmyr Gibbs')
+
+    // The board half is unchanged, which is the whole point of the split —
+    // a differing byte here would mean the cached prefix never gets reused.
+    expect(sent[1].context.reference).toBe(sent[0].context.reference)
+
+    // And the earlier exchange is still there, so a follow-up has its referent.
+    expect(sent[1].messages.map((m) => m.text)).toEqual([
+      'Where am I?',
+      'Noted.',
+      'And now?',
+    ])
+  })
+
   it('shows what it searched and links what it read', async () => {
     const adapter = new FakeAdapter()
     adapter.apiKey = 'sk-ant-test'

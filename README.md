@@ -262,9 +262,10 @@ cache with a one-hour lifetime — repeat questions during a draft re-read it at
 about a tenth of the price. Only the last few exchanges go back to the model;
 the transcript on screen keeps everything.
 
-Answers are Claude's, not ESPN's, and the tab says so on every one of them.
-Check anything load-bearing before you spend $60 on it. The transcript survives
-a reload and is cleared when you reset the draft.
+Answers are Claude's, not ESPN's, and every one of them is labelled as such
+where you read it rather than in a note at the bottom of the tab — check
+anything load-bearing before you spend $60 on it. The transcript survives a
+reload and is cleared when you reset the draft.
 
 ## Offline
 
