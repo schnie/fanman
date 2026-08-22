@@ -252,6 +252,33 @@ about the format. The live test bounds it loosely on the real board, so the day
 ESPN starts publishing superflex ownership values it fails — which is the news
 we would want, since the caveat and this function would both be wrong.
 
+**Every price prediction anchors on `priceAnchor`, not on `marketValue`.**
+`marketValue` is the better predictor wherever it shares our format — it is
+what people paid, against a book that is only ESPN's model — so under a one-QB
+book nothing changed. Under superflex it is quoted in someone else's format,
+and `roomPrice` built on it named $14 for a $46 quarterback. That number is
+not a caveated ESPN column; `room $N` is titled "likely price in this room",
+the app forecasting in its own voice, and it was wrong by 3x at the position
+this league starts two of. So the anchor falls back to `espnValue`, which is
+ESPN's price opinion *for this format*.
+
+It feeds everything downstream of a price, and the reason is consistency
+rather than tidiness — a ladder sorted on one number and priced on another
+picks substitutes nobody would offer. `summarizeMarket` (the remaining-value
+sum, the discretionary-value sum, *and* the estimated spend on an unwatched
+sale — otherwise a QB who sold for real money is booked at his one-QB average
+and the room appears to hold cash it has spent), `positionTier`, `roomPrice`,
+`displayRoomPrice`, and nomination's `byValueDesc` and `expected`.
+`displayRoomPrice` suppresses against the *anchor* it derived from, never the
+market column, or the adjustment vanishes at arbitrary inflation levels. The
+`|| p.marketValue` tail catches the deep bench, where ESPN publishes no book
+value at all and anchoring to zero would price every one of them at the $1
+floor.
+
+The market column itself is untouched — still displayed, still ESPN's figure,
+still carrying its measured caveat. This changes what we *predict*, not what
+we *report*.
+
 `DEFAULT_SETTINGS` only reaches a device with nothing stored, so
 `migrateSettings` corrects a saved draft on load — but **only before the draft
 opens**. Switching the book invalidates the rankings cache (it is keyed on

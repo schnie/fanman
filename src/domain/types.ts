@@ -118,6 +118,31 @@ export function marketIsComparable(scoring: Scoring): boolean {
 }
 
 /**
+ * The number every price prediction is built from: what this player is listed
+ * at, in the format we are actually drafting.
+ *
+ * `marketValue` is the better predictor whenever it is quoted in our format —
+ * it is what people really paid, where `espnValue` is only ESPN's model. But
+ * under superflex it is quoted in someone else's format, and the error is not
+ * small: Jalen Hurts books at $46 and averages $11, so a room price built on
+ * the market said he would go for $14. That number is not a caveated ESPN
+ * column, it is the app predicting a price in its own voice, and it was wrong
+ * by a factor of three at the position this league starts two of.
+ *
+ * So where the market column doesn't match the format, the book does, and the
+ * book wins. Under a one-QB book nothing changes.
+ *
+ * The `|| p.marketValue` tail is for the deep bench, where ESPN ranks nobody
+ * and publishes no book value but the market still prices the player. Anchor
+ * those to the only number that exists rather than to zero, which would price
+ * every one of them at the $1 floor.
+ */
+export function priceAnchor(p: Player, scoring: Scoring): number {
+  if (marketIsComparable(scoring)) return p.marketValue
+  return p.espnValue || p.marketValue
+}
+
+/**
  * Positive means the room is paying over ESPN's book value — a player being
  * bid up. Negative means the market is cooler than the book: a possible bargain.
  *

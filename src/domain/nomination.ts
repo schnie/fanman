@@ -7,7 +7,14 @@ import {
   roomPrice,
   type MarketState,
 } from './market'
-import { marketIsComparable, marketPremium, type Pick, type Player, type Settings } from './types'
+import {
+  marketIsComparable,
+  marketPremium,
+  priceAnchor,
+  type Pick,
+  type Player,
+  type Settings,
+} from './types'
 
 /**
  * What to throw out next, and why.
@@ -239,7 +246,13 @@ function prefer(players: Player[], keep: (p: Player) => boolean): Player[] {
  */
 const preferHealthy = (players: Player[]) => prefer(players, (p) => !p.injured)
 
-const byValueDesc = (a: Player, b: Player) => b.marketValue - a.marketValue
+/**
+ * Most expensive first, by the number this format actually prices players in —
+ * see `priceAnchor`. Sorting the market column here would have put a $65
+ * running back ahead of a $59 quarterback in a league that starts two of them.
+ */
+const byValueDesc = (scoring: Settings['scoring']) => (a: Player, b: Player) =>
+  priceAnchor(b, scoring) - priceAnchor(a, scoring)
 
 /**
  * Drain: an expensive player we don't need, ideally one the room is already
@@ -257,7 +270,7 @@ function drainPick(
   market: MarketState,
 ): NominationPick | undefined {
   const round = Math.max(1, settings.teamCount)
-  const pool = preferHealthy([...available].sort(byValueDesc).slice(0, round))
+  const pool = preferHealthy([...available].sort(byValueDesc(settings.scoring)).slice(0, round))
   const candidates = prefer(pool, (p) => !needed.has(p.position))
 
   // With no premium signal (SUPERFLEX) this collapses to the tiebreak, which
@@ -284,20 +297,20 @@ function buyPick(
   market: MarketState,
 ): NominationPick | undefined {
   const affordable = available.filter((p) => {
-    const price = roomPrice(p, market.inflation)
+    const price = roomPrice(p, market.inflation, settings.scoring)
     return price !== undefined && price <= summary.maxBid
   })
   if (affordable.length === 0) return undefined
 
   const pool = preferHealthy(prefer(affordable, (p) => needed.has(p.position)))
-  const leader = [...pool].sort(byValueDesc)[0]
+  const leader = [...pool].sort(byValueDesc(settings.scoring))[0]
 
   // The premium is what finds the tail of the tier. Without it (SUPERFLEX) the
   // tiebreak has to carry the intent on its own, and the intent is *cheapest*
   // near-identical player — so the fallback sorts up, not down. Leaving the
   // descending tiebreak in place would have handed back the tier leader, i.e.
   // exactly the player this function exists to avoid nominating.
-  const tier = positionTier(pool, leader)
+  const tier = positionTier(pool, leader, settings.scoring)
   const player = marketIsComparable(settings.scoring)
     ? [...tier].sort(
         (a, b) =>
@@ -315,7 +328,9 @@ function toPick(
   market: MarketState,
   posture: Posture,
 ): NominationPick {
-  const expected = roomPrice(player, market.inflation) ?? Math.round(player.marketValue)
+  const expected =
+    roomPrice(player, market.inflation, settings.scoring) ??
+    Math.round(priceAnchor(player, settings.scoring))
   // Opening at $1 when we want the player: there is never a reason to bid
   // against ourselves, and against a drained room it sometimes simply wins.
   const openAt =
